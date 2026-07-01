@@ -1,0 +1,26 @@
+import { apiClient, buildQuery } from "@/infrastructure/api";
+import type { BaseResponse, PaginationResponse, UserProfile } from "@/shared/types";
+
+export const accountService = {
+  getMyAccount: async () => {
+    return apiClient.get<BaseResponse<UserProfile>>("/account");
+  },
+  updateMyAccount: async (data: { fullName: string; phone?: string | null; address?: string | null; doB?: string | null }) => {
+    return apiClient.put<BaseResponse<UserProfile>>("/account", data);
+  },
+  updateAvatar: async (avatarUrl: string) => {
+    return apiClient.put<BaseResponse<UserProfile>>("/account/avatar", { avatarUrl });
+  },
+  changePassword: async (data: { currentPassword: string; newPassword: string; confirmNewPassword: string }) => {
+    return apiClient.post<BaseResponse<object>>("/account/change-password", data);
+  },
+  getUsers: async (page = 1, pageSize = 10) => {
+    return apiClient.get<PaginationResponse<UserProfile>>(`/account/users${buildQuery({ Page: page, PageSize: pageSize })}`);
+  },
+  getUser: async (userId: string) => {
+    return apiClient.get<BaseResponse<UserProfile>>(`/account/users/${userId}`);
+  },
+  changeUserStatus: async (userId: string, status: string) => {
+    return apiClient.put<BaseResponse<UserProfile>>(`/account/users/${userId}/status`, { status });
+  },
+};
