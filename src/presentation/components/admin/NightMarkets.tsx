@@ -4,9 +4,9 @@ import {
   Clock, CalendarDays, Grid3x3, ArrowLeft, Edit, Globe, Phone as PhoneIcon, FileText, Trash, Sliders, Settings, Upload
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { booths as boothsData, Market } from './data/marketData';
 import { adminNightMarketService, NightMarketStatus } from '@/application/features/admin/adminNightMarketService';
-import type { NightMarket } from '@/shared/types';
+import { adminBoothService } from '@/application/features/admin/adminBoothService';
+import type { Booth, NightMarket } from '@/shared/types';
 import { Pagination } from './components/Pagination';
 import { MapView } from './components/MapView';
 import { MarketLayout } from './components/MarketLayout';
@@ -33,9 +33,10 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [boothPage, setBoothPage] = useState(1);
   const [boothSearch, setBoothSearch] = useState('');
-  const [boothStatusFilter, setBoothStatusFilter] = useState<'Active' | 'Suspended' | 'Pending'>('Active');
+  const [boothStatusFilter, setBoothStatusFilter] = useState<'Active' | 'Suspended' | 'PendingApproval'>('Active');
   
-  const [selectedBoothDetail, setSelectedBoothDetail] = useState<typeof boothsData[0] | null>(null);
+  const [selectedBoothDetail, setSelectedBoothDetail] = useState<Booth | null>(null);
+  const [marketBooths, setMarketBooths] = useState<Booth[]>([]);
   const [previewDoc, setPreviewDoc] = useState<{ url: string; label: string } | null>(null);
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const [hoveredBoothRow, setHoveredBoothRow] = useState<string | null>(null);
@@ -45,9 +46,15 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
   const fetchMarkets = async () => {
     try {
       setLoading(true);
-      const res = await adminNightMarketService.getNightMarkets(1, 1000);
-      if (res.success) {
-        setMarketsList(res.data.items);
+      const [marketRes, boothRes] = await Promise.all([
+        adminNightMarketService.getNightMarkets(1, 1000),
+        adminBoothService.getAllBooths(1, 1000),
+      ]);
+      if (marketRes.success) {
+        setMarketsList(marketRes.data.items);
+      }
+      if (boothRes.success) {
+        setMarketBooths(boothRes.data.items);
       }
     } catch (e) {
       console.error(e);
@@ -71,7 +78,7 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
   const [newLng, setNewLng] = useState('106.6980');
   const [newWidth, setNewWidth] = useState('100');
   const [newHeight, setNewHeight] = useState('120');
-  const [newImages, setNewImages] = useState<string[]>(['https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800']);
+  const [newImages, setNewImages] = useState<string[]>([]);
 
   // Form States for Edit
   const [editName, setEditName] = useState('');
@@ -132,10 +139,10 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
   const market = marketsList.find(m => m.id === selectedMarket);
 
   const filteredBooth = selectedMarket
-    ? boothsData.filter(b => {
-        const matchMarket = String(b.marketId) === selectedMarket;
+    ? marketBooths.filter(b => {
+        const matchMarket = b.nightMarketId === selectedMarket;
         const q = boothSearch.toLowerCase();
-        const matchSearch = b.name.toLowerCase().includes(q) || b.owner.toLowerCase().includes(q);
+        const matchSearch = b.boothName.toLowerCase().includes(q) || (b.boothOwnerId || '').toLowerCase().includes(q);
         const matchStatus = b.status === boothStatusFilter;
         return matchMarket && matchSearch && matchStatus;
       })
@@ -456,7 +463,7 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: '#64748B' }}>
                       <CalendarDays style={{ width: '1rem', height: '1rem', flexShrink: 0 }} />
-                      <span>Created: {(market as any).createdAt || 'N/A'} · Updated: {(market as any).updatedAt || 'N/A'}</span>
+                      <span>Created: {(market as any).createdAt || 'No data available'} · Updated: {(market as any).updatedAt || 'No data available'}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: '#64748B' }}>
                       <Globe style={{ width: '1rem', height: '1rem', flexShrink: 0 }} />
@@ -510,8 +517,8 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
               {/* Status Segmented Control Tabs */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '0.75rem' }}>
                 <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', borderBottom: '1px solid #F1F5F9', paddingBottom: '0.75rem' }}>
-                  {(['Active', 'Suspended', 'Pending'] as const).map(status => {
-                    const count = boothsData.filter(b => String(b.marketId) === selectedMarket).filter(b => b.status === status).length;
+                  {(['Active', 'Suspended', 'PendingApproval'] as const).map(status => {
+                    const count = marketBooths.filter(b => b.nightMarketId === selectedMarket && b.status === status).length;
                     const active = boothStatusFilter === status;
                     return (
                       <button
@@ -534,7 +541,7 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
                           whiteSpace: 'nowrap'
                         }}
                       >
-                        {status}
+                        {status === 'PendingApproval' ? 'Pending' : status}
                         <span style={{
                           fontSize: '10px',
                           padding: '1px 5px',
@@ -582,13 +589,13 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
                       style={{ borderBottom: '1px solid #E5E7EB', background: hoveredBoothRow === String(b.id) ? '#F8FAFC' : 'transparent', transition: 'background 0.15s', cursor: 'pointer' }}
                     >
                       <td style={{ padding: '0.75rem 1rem' }}>
-                        <span style={{ fontWeight: 500, color: '#111827', fontSize: '0.875rem' }}>{b.name}</span>
+                        <span style={{ fontWeight: 500, color: '#111827', fontSize: '0.875rem' }}>{b.boothName || 'No data available'}</span>
                       </td>
-                      <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#111827' }}>{b.owner}</td>
-                      <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#64748B' }}>{b.phone}</td>
-                      <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#64748B' }}>Zone {b.zone} · #{b.slotNumber}</td>
+                      <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#111827' }}>{b.boothOwnerId || 'No data available'}</td>
+                      <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#64748B' }}>{b.phoneNumber || 'No data available'}</td>
+                      <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#64748B' }}>{b.slotNumber || 'No data available'}</td>
                       <td style={{ padding: '0.75rem 1rem' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 500, color: '#C084FC', background: 'rgba(168,85,247,0.12)', padding: '2px 8px', borderRadius: '4px' }}>{b.category}</span>
+                        <span style={{ fontSize: '11px', fontWeight: 500, color: '#64748B', background: 'rgba(100,116,139,0.12)', padding: '2px 8px', borderRadius: '4px' }}>No data available</span>
                       </td>
                       <td style={{ padding: '0.75rem 1rem' }}>
                         <span style={boothStatusBadge(b.status)}>{b.status}</span>
@@ -597,7 +604,7 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
                   ))}
                   {paginatedBooth.length === 0 && (
                     <tr>
-                      <td colSpan={6} style={{ padding: '2.5rem', textAlign: 'center', fontSize: '0.875rem', color: '#64748B' }}>No booths found</td>
+                      <td colSpan={6} style={{ padding: '2.5rem', textAlign: 'center', fontSize: '0.875rem', color: '#64748B' }}>No data available</td>
                     </tr>
                   )}
                 </tbody>
@@ -892,7 +899,7 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
       {/* Booth Detail Modal */}
       <Modal isOpen={!!selectedBoothDetail} onClose={() => setSelectedBoothDetail(null)} title="Booth Detail" size="lg">
         {selectedBoothDetail && (() => {
-          const b = selectedBoothDetail;
+          const b = selectedBoothDetail as any;
           const sectionCard: React.CSSProperties = {
             background: '#FFFFFF',
             border: '1px solid #E5E7EB',
@@ -910,7 +917,7 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               {/* Row 1: name + badges */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <h4 style={{ fontSize: '1.125rem', fontWeight: 700, color: '#111827', margin: 0 }}>{b.name}</h4>
+                <h4 style={{ fontSize: '1.125rem', fontWeight: 700, color: '#111827', margin: 0 }}>{b.boothName || 'No data available'}</h4>
                 <span style={boothStatusBadge(b.status)}>{b.status}</span>
               </div>
 
@@ -918,21 +925,21 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div style={sectionCard}>
                   <p style={{ fontSize: '11px', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.25rem', margin: 0 }}>Owner</p>
-                  <p style={{ color: '#111827', fontWeight: 600, fontSize: '0.875rem', margin: '4px 0 0' }}>{b.owner}</p>
-                  <p style={{ color: '#64748B', fontSize: '12px', marginTop: '0.2rem', margin: 0 }}>{b.phone}</p>
+                  <p style={{ color: '#111827', fontWeight: 600, fontSize: '0.875rem', margin: '4px 0 0' }}>{b.boothOwnerId || 'No data available'}</p>
+                  <p style={{ color: '#64748B', fontSize: '12px', marginTop: '0.2rem', margin: 0 }}>{b.phoneNumber || 'No data available'}</p>
                 </div>
                 <div style={sectionCard}>
                   <p style={{ fontSize: '11px', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.25rem', margin: 0 }}>Market</p>
-                  <p style={{ color: '#111827', fontWeight: 600, fontSize: '0.875rem', margin: '4px 0 0' }}>{b.market}</p>
-                  <p style={{ color: '#64748B', fontSize: '12px', marginTop: '0.2rem', margin: 0 }}>Zone {b.zone} · Slot #{b.slotNumber}</p>
+                  <p style={{ color: '#111827', fontWeight: 600, fontSize: '0.875rem', margin: '4px 0 0' }}>{market?.name || 'No data available'}</p>
+                  <p style={{ color: '#64748B', fontSize: '12px', marginTop: '0.2rem', margin: 0 }}>{b.slotNumber || 'No data available'}</p>
                 </div>
                 <div style={sectionCard}>
                   <p style={{ fontSize: '11px', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.25rem', margin: 0 }}>Category</p>
-                  <p style={{ color: '#111827', fontWeight: 600, fontSize: '0.875rem', margin: '4px 0 0' }}>{b.category}</p>
+                  <p style={{ color: '#111827', fontWeight: 600, fontSize: '0.875rem', margin: '4px 0 0' }}>No data available</p>
                 </div>
                 <div style={sectionCard}>
                   <p style={{ fontSize: '11px', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.25rem', margin: 0 }}>Registered</p>
-                  <p style={{ color: '#111827', fontWeight: 600, fontSize: '0.875rem', margin: '4px 0 0' }}>{b.registered}</p>
+                  <p style={{ color: '#111827', fontWeight: 600, fontSize: '0.875rem', margin: '4px 0 0' }}>No data available</p>
                 </div>
               </div>
 
@@ -1050,7 +1057,7 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
                 <div>
                   <p style={{ fontSize: '11px', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.5rem', margin: 0 }}>Images</p>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
-                    {b.images.map((img, idx) => (
+                    {b.images.map((img: string, idx: number) => (
                       <div key={idx} style={{ aspectRatio: '1', overflow: 'hidden', borderRadius: '0.5rem', background: '#FFFFFF' }}>
                         <img src={img} alt={`Booth image ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       </div>
@@ -1073,7 +1080,7 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
                         </tr>
                       </thead>
                       <tbody>
-                        {b.menu.map((item, idx) => (
+                        {b.menu.map((item: any, idx: number) => (
                           <tr key={idx} style={{ borderBottom: '1px solid #E5E7EB' }}>
                             <td style={{ padding: '0.5rem 1rem', color: '#111827', fontSize: '0.875rem' }}>{item.name}</td>
                             <td style={{ padding: '0.5rem 1rem', color: '#64748B', fontSize: '12px', textTransform: 'capitalize' }}>{item.category}</td>
@@ -1113,7 +1120,21 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
       {showLayoutMarket && (
         <MarketLayout
           market={marketsList.find(m => m.id === showLayoutMarket)!}
-          booths={boothsData.filter(b => String(b.marketId) === showLayoutMarket)}
+          booths={marketBooths.filter(b => b.nightMarketId === showLayoutMarket).map(b => ({
+            id: b.id,
+            name: b.boothName || 'No data available',
+            owner: b.boothOwnerId || 'No data available',
+            phone: b.phoneNumber || 'No data available',
+            status: b.status,
+            slotNumber: b.slotNumber || 'No data available',
+            location: b.slotNumber || 'No data available',
+            category: 'No data available',
+            zone: 'No data available',
+            plan: 'No data available',
+            boothCode: b.boothCode || 'No data available',
+            image: b.thumbnailUrl || '',
+            description: b.description || '',
+          }))}
           onClose={() => setShowLayoutMarket(null)}
         />
       )}

@@ -7,9 +7,9 @@ import {
 } from 'lucide-react';
 import { Modal } from './components/Modal';
 import { useState, useEffect } from 'react';
-import { booths as boothsData, getUserById, getRequestBooth, getMarketById, User as UserType } from './data/marketData';
 import { adminBoothService, BoothStatus } from '@/application/features/admin/adminBoothService';
-import type { Booth } from '@/shared/types';
+import { boothRegistrationService } from '@/application/features/boothRegistration/boothRegistrationService';
+import type { Booth, BoothRegistration } from '@/shared/types';
 import { Pagination } from './components/Pagination';
 type MainTab = 'booths' | 'requests';
 type BoothStatusFilter = 'Active' | 'Inactive' | 'Suspended' | 'Closed';
@@ -50,19 +50,23 @@ export function BoothManagement({ onNavigate }: BoothManagementProps) {
         if (res.success) {
           const mapped = res.data.items.map((b: any) => ({
             id: b.id,
-            name: b.boothName,
-            owner: 'User ' + (b.boothOwnerId?.substring(0,4) || ''),
-            ownerId: 1, 
-            market: 'Market ' + (b.nightMarketId?.substring(0,4) || ''),
-            marketId: 1,
-            category: 'Food', 
-            phone: b.phoneNumber || 'N/A',
-            boothCode: b.boothCode || 'N/A',
-            location: b.slotNumber ? `Slot ${b.slotNumber}` : 'N/A',
-            revenue: '$0', 
-            createdAt: b.openTime ? new Date(b.openTime).toLocaleDateString() : 'N/A',
+            name: b.boothName || 'No data available',
+            boothName: b.boothName || 'No data available',
+            owner: b.boothOwnerId || 'No data available',
+            ownerId: b.boothOwnerId || '',
+            boothOwnerId: b.boothOwnerId || '',
+            market: b.nightMarketId || 'No data available',
+            marketId: b.nightMarketId || '',
+            nightMarketId: b.nightMarketId || '',
+            category: 'No data available',
+            phone: b.phoneNumber || 'No data available',
+            phoneNumber: b.phoneNumber || '',
+            boothCode: b.boothCode || 'No data available',
+            location: b.slotNumber || 'No data available',
+            revenue: 'No data available',
+            createdAt: 'No data available',
             status: b.status,
-            image: b.thumbnailUrl || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400',
+            image: b.thumbnailUrl || '',
             description: b.description || '',
           }));
           setBooths(mapped);
@@ -81,12 +85,12 @@ export function BoothManagement({ onNavigate }: BoothManagementProps) {
   const [planFilter, setPlanFilter] = useState('all');
   const [marketFilter, setMarketFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [selectedBooth, setSelectedBooth] = useState<Booth | null>(null);
+  const [selectedBooth, setSelectedBooth] = useState<any | null>(null);
   const [actionType, setActionType] = useState<'view' | 'edit' | 'suspend' | 'delete' | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [previewDoc, setPreviewDoc] = useState<{ url: string; label: string } | null>(null);
-  const [hoveredRow, setHoveredRow] = useState<number | null>(null);
-  const [showOwnerDetails, setShowOwnerDetails] = useState<UserType | null>(null);
+  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
+  const [showOwnerDetails, setShowOwnerDetails] = useState<any | null>(null);
   const itemsPerPage = 10;
 
   const uniqueMarkets = Array.from(new Set(booths.map(b => b.market)));
@@ -113,17 +117,45 @@ export function BoothManagement({ onNavigate }: BoothManagementProps) {
   // Booth Requests state
   const [reqFilter, setReqFilter] = useState<RequestFilter>('Pending');
   const [reqPage, setReqPage] = useState(1);
-  const [reqStatuses, setReqStatuses] = useState<Record<number, RequestStatus>>({});
-  const [selectedReqId, setSelectedReqId] = useState<number | null>(null);
-  const [selectedReqDetailId, setSelectedReqDetailId] = useState<number | null>(null);
+  const [requestBooth, setRequestBooth] = useState<any[]>([]);
+  const [reqStatuses, setReqStatuses] = useState<Record<string, RequestStatus>>({});
+  const [selectedReqId, setSelectedReqId] = useState<string | null>(null);
+  const [selectedReqDetailId, setSelectedReqDetailId] = useState<string | null>(null);
   const [reqActionStep, setReqActionStep] = useState<'idle' | 'confirming-approve' | 'confirming-reject' | 'confirming-info' | 'done'>('idle');
   const [reqActionNote, setReqActionNote] = useState('');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [suspendReason, setSuspendReason] = useState('');
   const reqPerPage = 6;
-  const requestBooth = getRequestBooth();
 
-  const getReqStatus = (b: { id: number; status: string }): RequestStatus => {
+  useEffect(() => {
+    const fetchRequests = async () => {
+      try {
+        const res = await boothRegistrationService.getPending(1, 1000);
+        if (res.success) {
+          setRequestBooth(res.data.items.map((r: BoothRegistration) => ({
+            id: r.id,
+            name: r.boothName || 'No data available',
+            ownerId: r.ownerId || '',
+            owner: r.ownerId || 'No data available',
+            marketId: r.requestedNightMarketId || '',
+            market: r.requestedNightMarketId || 'No data available',
+            category: 'No data available',
+            phone: r.phone || 'No data available',
+            createdAt: r.createdAt ? new Date(r.createdAt).toLocaleDateString('vi-VN') : 'No data available',
+            status: r.status === 'PendingReview' ? 'Pending' : r.status,
+            description: r.description || '',
+            documents: r.documents || [],
+          })));
+        }
+      } catch (error) {
+        console.error("Failed to load booth requests", error);
+        setRequestBooth([]);
+      }
+    };
+    fetchRequests();
+  }, []);
+
+  const getReqStatus = (b: { id: string; status: string }): RequestStatus => {
     if (b.id in reqStatuses) return reqStatuses[b.id];
     if (b.status === 'Approved' || b.status === 'Rejected') return b.status as RequestStatus;
     return 'Pending';
@@ -139,24 +171,36 @@ export function BoothManagement({ onNavigate }: BoothManagementProps) {
   const reqTotalPages = Math.ceil(filteredReqs.length / reqPerPage);
   const pagedReqs = filteredReqs.slice((reqPage - 1) * reqPerPage, reqPage * reqPerPage);
 
-  const handleReqAction = (type: 'approve' | 'reject', boothId?: number) => {
+  const handleReqAction = async (type: 'approve' | 'reject', boothId?: string) => {
     const id = boothId ?? selectedReqId;
     if (!id) return;
     const newStatus: RequestStatus = type === 'approve' ? 'Approved' : 'Rejected';
+    try {
+      await boothRegistrationService.review(id, {
+        approved: type === 'approve',
+        rejectReason: type === 'reject' ? (reqActionNote || 'Rejected by admin') : null,
+      });
+    } catch (error) {
+      console.error("Failed to review booth request", error);
+      setToastMsg('Action failed');
+      setTimeout(() => setToastMsg(null), 2500);
+      return;
+    }
     setReqStatuses(prev => ({ ...prev, [id]: newStatus }));
+    setRequestBooth(prev => prev.map(b => b.id === id ? { ...b, status: newStatus } : b));
     setToastMsg(type === 'approve' ? 'Booth approved successfully' : 'Booth rejected');
     setReqActionStep('done');
     setTimeout(() => { setToastMsg(null); setReqActionStep('idle'); setReqActionNote(''); setSelectedReqId(null); }, 2500);
   };
 
-  const boothOwner = selectedBooth ? { id: selectedBooth.boothOwnerId, name: selectedBooth.boothName || 'N/A', avatar: '', email: 'N/A', phone: selectedBooth.phoneNumber || 'N/A' } : null;
+  const boothOwner = selectedBooth ? { id: selectedBooth.ownerId || selectedBooth.boothOwnerId, name: selectedBooth.owner || 'No data available', avatar: '', email: 'No data available', phone: selectedBooth.phone || 'No data available' } : null;
 
   const closeModals = () => { setSelectedBooth(null); setActionType(null); };
   const closeReqModal = () => { setSelectedReqDetailId(null); setSelectedReqId(null); };
 
   const reqDetailBooth = selectedReqDetailId !== null ? requestBooth.find(b => b.id === selectedReqDetailId) ?? null : null;
-  const reqDetailOwner = reqDetailBooth ? getUserById(reqDetailBooth.ownerId) : null;
-  const reqDetailMarket = reqDetailBooth ? getMarketById(reqDetailBooth.marketId) : null;
+  const reqDetailOwner = reqDetailBooth ? { id: reqDetailBooth.ownerId, name: reqDetailBooth.owner, email: 'No data available', phone: reqDetailBooth.phone } : null;
+  const reqDetailMarket = reqDetailBooth ? { id: reqDetailBooth.marketId, name: reqDetailBooth.market } : null;
   const reqDetailStatus = reqDetailBooth ? getReqStatus(reqDetailBooth) : 'Pending';
 
   const statusBadge = (status: string): React.CSSProperties => {
@@ -208,7 +252,7 @@ export function BoothManagement({ onNavigate }: BoothManagementProps) {
       await adminBoothService.updateBooth(selectedBooth.id, {
         boothName: selectedBooth.boothName,          // required field
         description: selectedBooth.description ?? undefined,
-        phoneNumber: selectedBooth.phoneNumber !== 'N/A' ? selectedBooth.phoneNumber : undefined,
+        phoneNumber: selectedBooth.phoneNumber || undefined,
         status: newStatusEnum,                  // send int enum value
         isFeatured: false,
       });
@@ -267,8 +311,8 @@ export function BoothManagement({ onNavigate }: BoothManagementProps) {
         <div style={cardStyle}>
           <div style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-              {selectedBooth.thumbnailUrl ? (
-                <img src={selectedBooth.thumbnailUrl} alt={selectedBooth.boothName} style={{ width: '4.5rem', height: '4.5rem', borderRadius: '0.75rem', objectFit: 'cover', flexShrink: 0, boxShadow: '0 0 0 3px rgba(99,102,241,0.3)' }} />
+              {selectedBooth.image ? (
+                <img src={selectedBooth.image} alt={selectedBooth.boothName} style={{ width: '4.5rem', height: '4.5rem', borderRadius: '0.75rem', objectFit: 'cover', flexShrink: 0, boxShadow: '0 0 0 3px rgba(99,102,241,0.3)' }} />
               ) : (
                 <div style={{ width: '4.5rem', height: '4.5rem', borderRadius: '0.75rem', background: '#F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 0 0 3px rgba(99,102,241,0.3)' }}>
                   <Store style={{ width: '1.75rem', height: '1.75rem', color: '#818CF8' }} />
@@ -319,10 +363,10 @@ export function BoothManagement({ onNavigate }: BoothManagementProps) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', padding: '1.5rem', borderTop: '1px solid #E5E7EB', background: '#F8FAFC' }}>
             {[
               { icon: <MapPin style={{ width: '1rem', height: '1rem', color: '#64748B' }} />, label: 'Market', value: 'Market ID: ' + selectedBooth.nightMarketId },
-              { icon: <Tag style={{ width: '1rem', height: '1rem', color: '#64748B' }} />, label: 'Category', value: 'N/A' },
-              { icon: <Store style={{ width: '1rem', height: '1rem', color: '#64748B' }} />, label: 'Zone / Slot', value: `Zone ${selectedBooth.zoneId} · Slot #${selectedBooth.slotNumber}` },
-              { icon: <DollarSign style={{ width: '1rem', height: '1rem', color: '#64748B' }} />, label: 'Subscription Plan', value: 'Standard' },
-              { icon: <Calendar style={{ width: '1rem', height: '1rem', color: '#64748B' }} />, label: 'Registration Date', value: 'N/A' },
+              { icon: <Tag style={{ width: '1rem', height: '1rem', color: '#64748B' }} />, label: 'Category', value: 'No data available' },
+              { icon: <Store style={{ width: '1rem', height: '1rem', color: '#64748B' }} />, label: 'Zone / Slot', value: selectedBooth.location || 'No data available' },
+              { icon: <DollarSign style={{ width: '1rem', height: '1rem', color: '#64748B' }} />, label: 'Subscription Plan', value: 'No data available' },
+              { icon: <Calendar style={{ width: '1rem', height: '1rem', color: '#64748B' }} />, label: 'Registration Date', value: 'No data available' },
             ].map(item => (
               <div key={item.label} style={{ padding: '1rem', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '0.75rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#64748B', fontSize: '12px', fontWeight: 500, marginBottom: '0.375rem' }}>
@@ -349,7 +393,13 @@ export function BoothManagement({ onNavigate }: BoothManagementProps) {
             </div>
             <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <img src={boothOwner.avatar} alt={boothOwner.name} style={{ width: '3.5rem', height: '3.5rem', borderRadius: '9999px', objectFit: 'cover' }} />
+                {boothOwner.avatar ? (
+                  <img src={boothOwner.avatar} alt={boothOwner.name} style={{ width: '3.5rem', height: '3.5rem', borderRadius: '9999px', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{ width: '3.5rem', height: '3.5rem', borderRadius: '9999px', background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <User style={{ width: '1.5rem', height: '1.5rem', color: '#4F46E5' }} />
+                  </div>
+                )}
                 <div>
                   <p style={{ fontSize: '1rem', fontWeight: 600, color: '#111827', margin: 0 }}>{boothOwner.name}</p>
                   <p style={{ fontSize: '0.8125rem', color: '#64748B', margin: '0.15rem 0 0' }}>Owner ID: #{boothOwner.id}</p>
@@ -360,13 +410,13 @@ export function BoothManagement({ onNavigate }: BoothManagementProps) {
                   <Mail style={{ width: '1rem', height: '1rem', color: '#64748B' }} /> {boothOwner.email}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: '#475569' }}>
-                  <Phone style={{ width: '1rem', height: '1rem', color: '#64748B' }} /> {(selectedBooth.phoneNumber || 'N/A')}
+                  <Phone style={{ width: '1rem', height: '1rem', color: '#64748B' }} /> {(selectedBooth.phone || 'No data available')}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: '#475569' }}>
-                  <Calendar style={{ width: '1rem', height: '1rem', color: '#64748B' }} /> Owner since {'N/A'}
+                  <Calendar style={{ width: '1rem', height: '1rem', color: '#64748B' }} /> Owner since No data available
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: '#475569' }}>
-                  <MapPin style={{ width: '1rem', height: '1rem', color: '#64748B' }} /> {(boothOwner as any).address || ['123 Nguyễn Huệ, Q.1, TP.HCM', '456 Lê Lợi, Q.Hải Châu, Đà Nẵng', '789 Trần Hưng Đạo, Q.Hoàn Kiếm, Hà Nội', '101 Hùng Vương, Nha Trang'][0]}
+                  <MapPin style={{ width: '1rem', height: '1rem', color: '#64748B' }} /> {(boothOwner as any).address || 'No data available'}
                 </div>
               </div>
             </div>
@@ -846,8 +896,8 @@ export function BoothManagement({ onNavigate }: BoothManagementProps) {
                   {[
                     { label: 'Owner Name', value: boothOwner.name },
                     { label: 'Email', value: boothOwner.email },
-                    { label: 'Phone', value: (selectedBooth.phoneNumber || 'N/A') },
-                    { label: 'Registered', value: 'N/A' },
+                    { label: 'Phone', value: (selectedBooth.phone || 'No data available') },
+                    { label: 'Registered', value: 'No data available' },
                   ].map(({ label, value }) => (
                     <div key={label}>
                       <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: '#64748B', marginBottom: '0.25rem' }}>{label}</label>
@@ -866,10 +916,8 @@ export function BoothManagement({ onNavigate }: BoothManagementProps) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#475569', marginBottom: '0.375rem' }}>Category</label>
-                    <select defaultValue={'N/A'} style={{ ...selectStyle, width: '100%' }}>
-                      {['Fast Food', 'Beverages', 'Seafood', 'Traditional Cuisine', 'Pastries & Desserts', 'Fresh Fruits', 'Grilled Food', 'Vegetarian'].map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
+                    <select defaultValue={'No data available'} style={{ ...selectStyle, width: '100%' }}>
+                      <option>No data available</option>
                     </select>
                   </div>
                   <div>
@@ -1001,12 +1049,12 @@ export function BoothManagement({ onNavigate }: BoothManagementProps) {
                 </div>
                 <div>
                   <p style={{ fontSize: '11px', color: '#64748B', margin: 0 }}>Registered</p>
-                  <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1F2937', margin: 0 }}>{reqDetailOwner.registered}</p>
+                  <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1F2937', margin: 0 }}>No data available</p>
                 </div>
                 <div style={{ gridColumn: 'span 2' }}>
                   <p style={{ fontSize: '11px', color: '#64748B', margin: 0 }}>Address</p>
                   <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1F2937', margin: 0 }}>
-                    {(reqDetailOwner as any).address || ['123 Nguyễn Huệ, Q.1, TP.HCM', '456 Lê Lợi, Q.Hải Châu, Đà Nẵng', '789 Trần Hưng Đạo, Q.Hoàn Kiếm, Hà Nội', '101 Hùng Vương, Nha Trang'][reqDetailOwner.id % 4]}
+                    {(reqDetailOwner as any).address || 'No data available'}
                   </p>
                 </div>
               </div>

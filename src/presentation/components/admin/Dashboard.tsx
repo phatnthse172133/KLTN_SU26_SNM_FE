@@ -1,8 +1,13 @@
 "use client";
 
 import { MapPin, Store, Star, MessageSquareWarning, DollarSign, ChevronDown, Users, Crown, Calendar } from 'lucide-react';
-import { useState, useMemo, useRef } from 'react';
-import { markets as marketsData, getPendingBooth, getOpenComplaints } from './data/marketData';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { adminNightMarketService } from '@/application/features/admin/adminNightMarketService';
+import { adminBoothService } from '@/application/features/admin/adminBoothService';
+import { adminComplaintService } from '@/application/features/admin/adminComplaintService';
+import { boothRegistrationService } from '@/application/features/boothRegistration/boothRegistrationService';
+import { reviewService } from '@/application/features/reviews/reviewService';
+import type { Booth, BoothRegistration, Complaint, NightMarket } from '@/shared/types';
 
 // ── Period data ────────────────────────────────────────────────────────────────
 
@@ -483,6 +488,18 @@ interface DashboardProps {
   onNavigate?: (tab: string, params?: any) => void;
 }
 
+const emptyPeriodData: MonthData = {
+  platformRevenue: 0,
+  totalMarkets: 0,
+  totalBooth: 0,
+  newBooth: 0,
+  newReview: 0,
+  newComplaints: 0,
+  totalSubscription: 0,
+  activeSubscription: 0,
+  newSubscription: 0,
+};
+
 export function Dashboard({ onNavigate }: DashboardProps) {
 
   const [dateRange, setDateRange] = useState<'month' | 'year'>('month');
@@ -491,9 +508,37 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const [selectedYear, setSelectedYear] = useState<number>(2026);
 
   const [chartView, setChartView] = useState<'platformRevenue' | 'newBooth'>('platformRevenue');
+  const [markets, setMarkets] = useState<NightMarket[]>([]);
+  const [booths, setBooths] = useState<Booth[]>([]);
+  const [pendingRegistrations, setPendingRegistrations] = useState<BoothRegistration[]>([]);
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [reviewTotal, setReviewTotal] = useState(0);
 
-  const pendingBooth = useMemo(() => getPendingBooth().slice(0, 6), []);
-  const openComplaints = useMemo(() => getOpenComplaints().filter(c => c.status === 'Open').slice(0, 6), []);
+  useEffect(() => {
+    let mounted = true;
+    Promise.allSettled([
+      adminNightMarketService.getNightMarkets(1, 1000),
+      adminBoothService.getAllBooths(1, 1000),
+      boothRegistrationService.getPending(1, 1000),
+      adminComplaintService.getAllComplaints(1, 1000),
+      reviewService.getAll(1, 1000),
+    ]).then((results) => {
+      if (!mounted) return;
+      const [marketRes, boothRes, pendingRes, complaintRes, reviewRes] = results;
+      if (marketRes.status === 'fulfilled') setMarkets(marketRes.value.data?.items ?? []);
+      if (boothRes.status === 'fulfilled') setBooths(boothRes.value.data?.items ?? []);
+      if (pendingRes.status === 'fulfilled') setPendingRegistrations(pendingRes.value.data?.items ?? []);
+      if (complaintRes.status === 'fulfilled') setComplaints(complaintRes.value.data?.items ?? []);
+      if (reviewRes.status === 'fulfilled') setReviewTotal(reviewRes.value.data?.total ?? reviewRes.value.data?.items?.length ?? 0);
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  const pendingBooth = useMemo(() => pendingRegistrations.slice(0, 6), [pendingRegistrations]);
+  const openComplaints = useMemo(
+    () => complaints.filter(c => ['Submitted', 'UnderInvestigation', 'Open', 'Investigating'].includes(c.status)).slice(0, 6),
+    [complaints]
+  );
 
   const getEffectivePeriod = (range: string, month: string, monthYear: number, year: number) => {
     if (range === 'month') return { year: monthYear, month };
@@ -501,8 +546,14 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   };
 
   const eff = getEffectivePeriod(dateRange, selectedMonth, selectedMonthYear, selectedYear);
-  const periodData = useMemo(() => getPeriodData(eff.year, eff.month), [eff.year, eff.month]);
-  const chartData = useMemo(() => getChartData(eff.year, eff.month, chartView), [eff.year, eff.month, chartView]);
+  const periodData = useMemo(() => ({
+    ...emptyPeriodData,
+    totalMarkets: markets.length,
+    totalBooth: booths.length,
+    newReview: reviewTotal,
+    newComplaints: complaints.length,
+  }), [markets.length, booths.length, reviewTotal, complaints.length]);
+  const chartData = useMemo(() => [], [chartView]);
 
   const periodLabel = dateRange === "month" ? `${selectedMonth} ${selectedMonthYear}` : `Year ${selectedYear}`;
 
@@ -528,7 +579,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     newBooth: { label: 'Newly Registered Booths', shortLabel: 'New Booths', color: '#10B981' },
   } as const;
 
-  const availableMonths = Object.keys(yearMonthData[selectedYear] || {});
+  const availableMonths = months;
 
   return (
     <div className="p-6 space-y-6">
@@ -686,14 +737,20 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           </div>
         </div>
 
-        <SvgLineChart
-          data={chartData}
-          dataKey={chartView}
-          color={chartViewConfig[chartView].color}
-          shortLabel={chartViewConfig[chartView].shortLabel}
-          formatY={(v) => formatValue(v, chartView)}
-          isCurrency={chartView === 'platformRevenue'}
-        />
+        {chartData.length === 0 ? (
+          <div className="h-72 flex items-center justify-center text-sm" style={{ color: '#64748B' }}>
+            No data available
+          </div>
+        ) : (
+          <SvgLineChart
+            data={chartData}
+            dataKey={chartView}
+            color={chartViewConfig[chartView].color}
+            shortLabel={chartViewConfig[chartView].shortLabel}
+            formatY={(v) => formatValue(v, chartView)}
+            isCurrency={chartView === 'platformRevenue'}
+          />
+        )}
       </div>
 
 
@@ -724,7 +781,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           </div>
           <div className="space-y-2">
             {pendingBooth.length === 0 ? (
-              <p className="text-sm text-center py-6" style={{ color: '#475569' }}>No pending approvals</p>
+              <p className="text-sm text-center py-6" style={{ color: '#475569' }}>No data available</p>
             ) : (
               pendingBooth.map(booth => (
                 <div
@@ -739,10 +796,12 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                     <Store className="w-4 h-4" style={{ color: '#FB923C' }} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm Muncate" style={{ color: '#111827' }}>{booth.name}</p>
-                    <p className="text-xs Muncate" style={{ color: '#475569' }}>{booth.market} · {booth.boothCode}</p>
+                    <p className="text-sm Muncate" style={{ color: '#111827' }}>{booth.boothName || 'No data available'}</p>
+                    <p className="text-xs Muncate" style={{ color: '#475569' }}>{booth.phone || 'No data available'}</p>
                   </div>
-                  <span className="text-xs flex-shrink-0" style={{ color: '#475569' }}>{booth.registered}</span>
+                  <span className="text-xs flex-shrink-0" style={{ color: '#475569' }}>
+                    {booth.createdAt ? new Date(booth.createdAt).toLocaleDateString('vi-VN') : 'No data available'}
+                  </span>
                 </div>
               ))
             )}
@@ -773,7 +832,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           </div>
           <div className="space-y-2">
             {openComplaints.length === 0 ? (
-              <p className="text-sm text-center py-6" style={{ color: '#475569' }}>No open complaints</p>
+              <p className="text-sm text-center py-6" style={{ color: '#475569' }}>No data available</p>
             ) : (
               openComplaints.map(c => (
                 <div
@@ -783,24 +842,18 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 >
                   <span
                     className="flex-shrink-0 px-2 py-0.5 rounded text-xs"
-                    style={
-                      c.priority === 'Critical'
-                        ? { background: 'rgba(239,68,68,0.12)', color: '#F87171', border: '1px solid rgba(239,68,68,0.2)' }
-                        : c.priority === 'High'
-                        ? { background: 'rgba(249,115,22,0.12)', color: '#FB923C', border: '1px solid rgba(249,115,22,0.2)' }
-                        : { background: 'rgba(234,179,8,0.12)', color: '#FACC15', border: '1px solid rgba(234,179,8,0.2)' }
-                    }
+                    style={{ background: 'rgba(239,68,68,0.12)', color: '#F87171', border: '1px solid rgba(239,68,68,0.2)' }}
                   >
-                    {c.priority}
+                    {c.status || 'No data'}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm Muncate" style={{ color: '#111827' }}>{c.id} · {c.category}</p>
-                    <p className="text-xs Muncate" style={{ color: '#475569' }}>{c.description.substring(0, 50)}…</p>
+                    <p className="text-sm Muncate" style={{ color: '#111827' }}>{c.title || c.id || 'No data available'}</p>
+                    <p className="text-xs Muncate" style={{ color: '#475569' }}>{(c.description || 'No data available').slice(0, 50)}</p>
                   </div>
                   <span
                     className="flex-shrink-0 text-xs px-2 py-0.5 rounded"
                     style={
-                      c.status === 'Open'
+                      c.status === 'Submitted'
                         ? { background: 'rgba(239,68,68,0.1)', color: '#F87171' }
                         : { background: 'rgba(245,158,11,0.1)', color: '#FBBF24' }
                     }
@@ -834,35 +887,50 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               </tr>
             </thead>
             <tbody>
-              {marketsData.slice(0, 5).map(market => (
-                <tr
-                  key={market.id}
-                  onClick={() => onNavigate && onNavigate('markets', { marketId: market.id })}
-                  className="transition-all hover:bg-gray-50 cursor-pointer"
-                  style={{ borderBottom: '1px solid #E5E7EB' }}
-                >
-                  <td className="py-3 px-3 text-sm" style={{ color: '#111827' }}>{market.name}</td>
-                  <td className="py-3 px-3 text-sm" style={{ color: '#64748B' }}>{market.location}</td>
-                  <td className="py-3 px-3 text-sm" style={{ color: '#64748B' }}>{market.openingHours}</td>
-                  <td className="py-3 px-3 text-sm" style={{ color: '#334155' }}>{market.totalBooth}</td>
-                  <td className="py-3 px-3 text-sm" style={{ color: '#34D399' }}>{market.activeBooth}</td>
-                  <td className="py-3 px-3 text-sm" style={{ color: '#2DD4BF' }}>{market.occupancy}%</td>
-                  <td className="py-3 px-3">
-                    <span
-                      className="text-xs px-2.5 py-0.5 rounded-full"
-                      style={
-                        market.status === 'Active'
-                          ? { background: 'rgba(16,185,129,0.12)', color: '#34D399', border: '1px solid rgba(16,185,129,0.25)' }
-                          : market.status === 'Maintenance'
-                          ? { background: 'rgba(245,158,11,0.12)', color: '#FBBF24', border: '1px solid rgba(245,158,11,0.25)' }
-                          : { background: 'rgba(100,116,139,0.12)', color: '#64748B', border: '1px solid rgba(100,116,139,0.25)' }
-                      }
-                    >
-                      {market.status}
-                    </span>
+              {markets.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-sm" style={{ color: '#64748B' }}>
+                    No data available
                   </td>
                 </tr>
-              ))}
+              ) : (
+                markets.slice(0, 5).map(market => {
+                  const activeBooth = booths.filter(booth => booth.nightMarketId === market.id && booth.status === 'Active').length;
+                  const totalBooth = market.totalBooth ?? booths.filter(booth => booth.nightMarketId === market.id).length;
+                  const occupancy = totalBooth > 0 ? Math.round((activeBooth / totalBooth) * 100) : null;
+                  const hours = [market.openingHours, market.closingHours].filter(Boolean).join(' - ') || 'No data available';
+
+                  return (
+                    <tr
+                      key={market.id}
+                      onClick={() => onNavigate && onNavigate('markets', { marketId: market.id })}
+                      className="transition-all hover:bg-gray-50 cursor-pointer"
+                      style={{ borderBottom: '1px solid #E5E7EB' }}
+                    >
+                      <td className="py-3 px-3 text-sm" style={{ color: '#111827' }}>{market.name || 'No data available'}</td>
+                      <td className="py-3 px-3 text-sm" style={{ color: '#64748B' }}>{market.address || 'No data available'}</td>
+                      <td className="py-3 px-3 text-sm" style={{ color: '#64748B' }}>{hours}</td>
+                      <td className="py-3 px-3 text-sm" style={{ color: '#334155' }}>{totalBooth || 'No data available'}</td>
+                      <td className="py-3 px-3 text-sm" style={{ color: '#34D399' }}>{activeBooth || 'No data available'}</td>
+                      <td className="py-3 px-3 text-sm" style={{ color: '#2DD4BF' }}>{occupancy !== null ? `${occupancy}%` : 'No data available'}</td>
+                      <td className="py-3 px-3">
+                        <span
+                          className="text-xs px-2.5 py-0.5 rounded-full"
+                          style={
+                            market.status === 'Open'
+                              ? { background: 'rgba(16,185,129,0.12)', color: '#34D399', border: '1px solid rgba(16,185,129,0.25)' }
+                              : market.status === 'Closed'
+                              ? { background: 'rgba(245,158,11,0.12)', color: '#FBBF24', border: '1px solid rgba(245,158,11,0.25)' }
+                              : { background: 'rgba(100,116,139,0.12)', color: '#64748B', border: '1px solid rgba(100,116,139,0.25)' }
+                          }
+                        >
+                          {market.status || 'No data'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

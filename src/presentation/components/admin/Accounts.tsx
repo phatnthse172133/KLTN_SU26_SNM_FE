@@ -4,7 +4,6 @@ import { Search, Eye, Ban, CheckCircle, Mail, Phone, Calendar, ShoppingBag, Stor
 import { useState, useMemo, useEffect } from 'react';
 import { Modal } from './components/Modal';
 import { Pagination } from './components/Pagination';
-import { booths as boothsData } from './data/marketData';
 type RoleTab = 'customer' | 'booth_owner';
 import { adminAccountService, UserStatus } from '@/application/features/admin/adminAccountService';
 
@@ -28,19 +27,6 @@ const thStyle: React.CSSProperties = {
   fontWeight: 600,
 };
 
-const mockAddresses = [
-  "123 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh",
-  "456 Lê Lợi, Quận Hải Châu, Đà Nẵng",
-  "789 Trần Hưng Đạo, Quận Hoàn Kiếm, Hà Nội",
-  "101 Hùng Vương, Nha Trang, Khánh Hòa",
-  "202 Nguyễn Văn Cừ, Quận Ninh Kiều, Cần Thơ",
-  "303 Trần Phú, Đà Lạt, Lâm Đồng",
-  "404 Lê Hồng Phong, Vũng Tàu, Bà Rịa - Vũng Tàu",
-  "505 Quang Trung, Gò Vấp, TP. Hồ Chí Minh",
-  "606 Bạch Đằng, Quận Hồng Bàng, Hải Phòng",
-  "707 Điện Biên Phủ, Quận Thanh Khê, Đà Nẵng"
-];
-
 function statusPill(status: string): React.CSSProperties {
   if (status === 'Active') return { display: 'inline-flex', alignItems: 'center', background: 'rgba(16,185,129,0.15)', color: '#10B981', border: '1px solid rgba(16,185,129,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '12px', fontWeight: 600 };
   if (status === 'Suspended') return { display: 'inline-flex', alignItems: 'center', background: 'rgba(239,68,68,0.15)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '12px', fontWeight: 600 };
@@ -54,7 +40,6 @@ interface AccountsProps {
 export function Accounts({ initialUserId }: AccountsProps) {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [booths, setBooths] = useState(boothsData);
   const [roleTab, setRoleTab] = useState<RoleTab>(initialUserId ? 'booth_owner' : 'customer');
   const [statusTab, setStatusTab] = useState<StatusTab>('Active');
   const [searchQuery, setSearchQuery] = useState('');
@@ -85,10 +70,9 @@ export function Accounts({ initialUserId }: AccountsProps) {
             role: u.role === 'BoothOwner' ? 'booth_owner' : 'customer',
             status: u.status, // e.g. "Active", "Suspended", "PendingVerification"
             avatar: u.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.fullName)}&background=random`,
-            registered: u.createdAt ? new Date(u.createdAt).toLocaleDateString('vi-VN') : 'N/A',
-            phone: u.phone || 'N/A',
-            // ManagedUserResponse does NOT include address — display N/A
-            address: 'N/A',
+            registered: u.createdAt ? new Date(u.createdAt).toLocaleDateString('vi-VN') : 'No data available',
+            phone: u.phone || 'No data available',
+            address: 'No data available',
           }));
           setUsers(mapped);
         }
@@ -157,7 +141,7 @@ export function Accounts({ initialUserId }: AccountsProps) {
 
   // --- Booth Owner Detailed Screen ---
   if (selectedId && selected && selected.role === 'booth_owner') {
-    const ownedBooths = booths.filter(b => b.ownerId === selected.id);
+    const ownedBooths: any[] = [];
     return (
       <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         <div>
@@ -277,18 +261,14 @@ export function Accounts({ initialUserId }: AccountsProps) {
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       {booth.status === 'Active' ? (
                         <button
-                          onClick={() => {
-                            setBooths(prev => prev.map(b => b.id === booth.id ? { ...b, status: 'Suspended' } : b));
-                          }}
+                          disabled
                           style={{ padding: '0.5rem 0.75rem', background: '#FEF2F2', border: '1px solid #FEE2E2', color: '#EF4444', borderRadius: '0.375rem', fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
                         >
                           <Ban style={{ width: '0.875rem', height: '0.875rem' }} /> Suspend Booth
                         </button>
                       ) : (
                         <button
-                          onClick={() => {
-                            setBooths(prev => prev.map(b => b.id === booth.id ? { ...b, status: 'Active' } : b));
-                          }}
+                          disabled
                           style={{ padding: '0.5rem 0.75rem', background: '#ECFDF5', border: '1px solid #D1FAE5', color: '#10B981', borderRadius: '0.375rem', fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
                         >
                           <CheckCircle style={{ width: '0.875rem', height: '0.875rem' }} /> Activate Booth
@@ -630,7 +610,7 @@ export function Accounts({ initialUserId }: AccountsProps) {
                 { icon: <Mail style={{ width: '0.875rem', height: '0.875rem' }} />, label: 'Email', value: selected.email },
                 { icon: <Phone style={{ width: '0.875rem', height: '0.875rem' }} />, label: 'Phone', value: selected.phone },
                 { icon: <Calendar style={{ width: '0.875rem', height: '0.875rem' }} />, label: 'Registered', value: selected.registered },
-                { icon: <MapPin style={{ width: '0.875rem', height: '0.875rem' }} />, label: 'Address', value: selected.address ?? mockAddresses[selected.id % mockAddresses.length] },
+                { icon: <MapPin style={{ width: '0.875rem', height: '0.875rem' }} />, label: 'Address', value: selected.address || 'No data available' },
               ].map(item => (
                 <div key={item.label} style={{ padding: '0.75rem', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <div style={{ color: '#64748B' }}>{item.icon}</div>
