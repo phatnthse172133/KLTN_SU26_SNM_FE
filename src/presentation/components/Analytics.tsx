@@ -26,7 +26,7 @@ export function Analytics() {
       <ResponsiveContainer width="100%" height="100%">
         {kind === "pie" ? <PieChart><Pie data={emptyData} dataKey="value" /></PieChart> : kind === "line" ? <LineChart data={emptyData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Line dataKey="value" stroke="#10B981" /></LineChart> : <BarChart data={emptyData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Bar dataKey="value" fill="#4F46E5" /></BarChart>}
       </ResponsiveContainer>
-      <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500">No data from API</div>
+      <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500">No data available</div>
     </div>
   );
 
@@ -40,7 +40,7 @@ export function Analytics() {
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-600">{periodLabel}</div>
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{kpis.map((kpi)=><div key={kpi.title} className="bg-white rounded-xl p-5 border border-gray-200 shadow-[0_1px_4px_rgba(0,0,0,0.08)]"><div className="flex justify-between"><div><p className="text-sm font-medium text-gray-500">{kpi.title}</p><h3 className="text-2xl font-bold text-gray-900 mt-1">No data</h3></div><div className={`p-2 rounded-lg h-fit ${kpi.bg}`}><kpi.icon className={`w-5 h-5 ${kpi.color}`} /></div></div><p className="text-xs text-gray-500 mt-3">No data from API</p></div>)}</div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{kpis.map((kpi)=><div key={kpi.title} className="bg-white rounded-xl p-5 border border-gray-200 shadow-[0_1px_4px_rgba(0,0,0,0.08)]"><div className="flex justify-between"><div><p className="text-sm font-medium text-gray-500">{kpi.title}</p><h3 className="text-2xl font-bold text-gray-900 mt-1">No data</h3></div><div className={`p-2 rounded-lg h-fit ${kpi.bg}`}><kpi.icon className={`w-5 h-5 ${kpi.color}`} /></div></div><p className="text-xs text-gray-500 mt-3">No data available</p></div>)}</div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-[0_1px_4px_rgba(0,0,0,0.08)]"><h3 className="text-base font-bold text-gray-900 mb-6">Revenue by Day of Week</h3>{emptyChart("bar")}</div>
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-[0_1px_4px_rgba(0,0,0,0.08)]"><h3 className="text-base font-bold text-gray-900 mb-6">Revenue by Category</h3>{emptyChart("pie")}</div>

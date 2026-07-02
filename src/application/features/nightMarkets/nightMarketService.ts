@@ -3,7 +3,7 @@ import type { BaseResponse, NightMarket, PaginationResponse } from "@/shared/typ
 
 export const nightMarketService = {
   getAll: async (page = 1, pageSize = 10) => {
-    return apiClient.get<PaginationResponse<NightMarket>>(`/night-markets${buildQuery({ Page: page, PageSize: pageSize })}`);
+    return apiClient.get<BaseResponse<PaginationResponse<NightMarket>>>(`/night-markets${buildQuery({ Page: page, PageSize: pageSize })}`);
   },
   getById: async (id: string) => {
     return apiClient.get<BaseResponse<NightMarket>>(`/night-markets/${id}`);

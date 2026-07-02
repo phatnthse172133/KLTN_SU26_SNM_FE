@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { BoothProvider, useBooth } from "@/application/context/BoothContext";
 import { accountService } from "@/application/features/account/accountService";
 import {
@@ -51,7 +51,7 @@ const navItems = [
 const searchableRoutes = navItems.map((item) => ({
   type: item.name.includes("Menu") ? "menu" : item.name.includes("Booth") ? "booth" : "page",
   label: item.name,
-  sub: "No API search data connected",
+  sub: "No data available",
   path: item.path,
 }));
 
@@ -195,9 +195,9 @@ function ProfileModal({ onClose, initialTab = "profile" }: { onClose: () => void
             <div className="mx-6 mb-4 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 flex items-center justify-between">
               <div>
                 <p className="text-xs text-indigo-400 font-medium">Active Booth</p>
-                <p className="text-sm font-bold text-indigo-800 mt-0.5">{selectedBooth?.boothName ?? "No data from API"}</p>
+                <p className="text-sm font-bold text-indigo-800 mt-0.5">{selectedBooth?.boothName ?? "No data available"}</p>
               </div>
-              <Link href="/booth" onClick={onClose} className="text-xs font-semibold text-indigo-600 hover:underline flex items-center gap-0.5">
+              <Link href="/boothowner/booth" onClick={onClose} className="text-xs font-semibold text-indigo-600 hover:underline flex items-center gap-0.5">
                 View <ChevronRight className="w-3 h-3" />
               </Link>
             </div>
@@ -235,7 +235,8 @@ function ProfileModal({ onClose, initialTab = "profile" }: { onClose: () => void
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { logout, user } = useAuth();
+  const router = useRouter();
+  const { isAuthenticated, isReady, logout, user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [showBell, setShowBell] = useState(false);
@@ -250,6 +251,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
     : [];
 
   useEffect(() => {
+    if (isReady && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [isAuthenticated, isReady, router]);
+
+  useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) setShowSearch(false);
       if (bellRef.current && !bellRef.current.contains(e.target as Node)) setShowBell(false);
@@ -258,6 +265,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  if (!isReady || !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center text-sm font-medium text-gray-500">
+        Loading...
+      </div>
+    );
+  }
 
   return (
     <BoothProvider>
@@ -270,7 +285,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = pathname === item.path || (item.path !== "/" && pathname.startsWith(item.path));
+              const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`);
               return (
                 <Link key={item.name} href={item.path} className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive ? "bg-indigo-50 text-indigo-600" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"}`}>
                   <Icon className="w-5 h-5 mr-3 flex-shrink-0" />
@@ -298,7 +313,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   ))}
                 </div>
               )}
-              {showSearch && searchQuery.trim().length > 0 && searchResults.length === 0 && <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-xl z-50 px-4 py-6 text-center text-sm text-gray-400">No data from API</div>}
+              {showSearch && searchQuery.trim().length > 0 && searchResults.length === 0 && <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-xl z-50 px-4 py-6 text-center text-sm text-gray-400">No data available</div>}
             </div>
 
             <div className="flex items-center gap-5 ml-4">
@@ -307,7 +322,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 {showBell && (
                   <div className="absolute top-full right-0 mt-3 w-80 bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 overflow-hidden">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100"><h3 className="text-sm font-bold text-gray-900">Notifications</h3></div>
-                    <div className="px-4 py-6 text-center text-sm text-gray-400">No data from API</div>
+                    <div className="px-4 py-6 text-center text-sm text-gray-400">No data available</div>
                   </div>
                 )}
               </div>

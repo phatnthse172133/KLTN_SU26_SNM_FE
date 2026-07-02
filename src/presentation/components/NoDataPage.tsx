@@ -40,7 +40,7 @@ export function NoDataPage({ title, subtitle, primaryLabel = "Action" }: NoDataP
                 <stat.icon className="w-5 h-5 text-indigo-600" />
               </div>
             </div>
-            <p className="text-xs text-gray-500 mt-3 font-medium">No API endpoint connected for this metric</p>
+            <p className="text-xs text-gray-500 mt-3 font-medium">No data available</p>
           </div>
         ))}
       </div>
@@ -65,7 +65,7 @@ export function NoDataPage({ title, subtitle, primaryLabel = "Action" }: NoDataP
         </div>
         <div className="px-6 py-16 text-center">
           <Database className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-          <p className="text-sm font-medium text-gray-500">No data from API</p>
+          <p className="text-sm font-medium text-gray-500">No data available</p>
         </div>
       </div>
     </div>

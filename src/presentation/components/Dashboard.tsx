@@ -109,7 +109,7 @@ export function Dashboard() {
     {
       title: "Subscription Revenue",
       value: "No data",
-      subtitle: "No data from API",
+      subtitle: "No data available",
       icon: TrendingUp,
       color: "text-emerald-500",
       bg: "bg-emerald-50",
@@ -117,7 +117,7 @@ export function Dashboard() {
     {
       title: "Orders",
       value: "No data",
-      subtitle: "No data from API",
+      subtitle: "No data available",
       icon: Package,
       color: "text-indigo-600",
       bg: "bg-indigo-50",
@@ -125,7 +125,7 @@ export function Dashboard() {
     {
       title: "Rating",
       value: ratingValue,
-      subtitle: reviewTotal == null ? "No data from API" : `From ${reviewTotal} visible reviews`,
+      subtitle: reviewTotal == null ? "No data available" : `From ${reviewTotal} visible reviews`,
       icon: Star,
       color: "text-orange-500",
       bg: "bg-orange-50",
@@ -225,7 +225,7 @@ export function Dashboard() {
               <Line type="monotone" dataKey="revenue" stroke="#4F46E5" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
             </LineChart>
           </ResponsiveContainer>
-          <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500 pointer-events-none">No data from API</div>
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500 pointer-events-none">No data available</div>
         </div>
       </div>
 
@@ -251,7 +251,7 @@ export function Dashboard() {
               </thead>
               <tbody>
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-sm text-gray-500">No data from API</td>
+                  <td colSpan={5} className="px-4 py-12 text-center text-sm text-gray-500">No data available</td>
                 </tr>
               </tbody>
             </table>
@@ -260,7 +260,7 @@ export function Dashboard() {
 
         <div className="lg:col-span-3 bg-white rounded-xl border border-gray-200 shadow-[0_1px_4px_rgba(0,0,0,0.08)] p-6">
           <h3 className="text-base font-bold text-gray-900 mb-5">Top Selling Items</h3>
-          <div className="min-h-[180px] flex items-center justify-center text-sm text-gray-500 text-center">No data from API</div>
+          <div className="min-h-[180px] flex items-center justify-center text-sm text-gray-500 text-center">No data available</div>
         </div>
       </div>
     </div>

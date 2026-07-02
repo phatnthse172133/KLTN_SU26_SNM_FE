@@ -34,11 +34,11 @@ export function LoginRegister() {
       if (isLogin) {
         const response = await authService.login({ email, password });
         if (!response.data?.accessToken) {
-          setError("Login API did not return an access token.");
+          setError("Login failed. Please try again.");
           return;
         }
         login(response.data.accessToken, response.data.refreshToken, response.data.user);
-        router.push("/");
+        router.replace("/boothowner");
         return;
       }
 
@@ -74,9 +74,6 @@ export function LoginRegister() {
           </div>
         </div>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">Smart Night Market</h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          {isLogin ? "Sign in with the backend API" : "Create a booth owner account through the backend API"}
-        </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">

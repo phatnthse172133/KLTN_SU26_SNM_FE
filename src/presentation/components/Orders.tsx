@@ -24,8 +24,8 @@ export function Orders() {
             </div>
             <div className="p-10 text-center">
               <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <p className="text-sm font-medium text-gray-700">No data from API</p>
-              <p className="text-xs text-gray-400 mt-1">The backend does not provide an order creation endpoint.</p>
+              <p className="text-sm font-medium text-gray-700">No data available</p>
+              <p className="text-xs text-gray-400 mt-1">Order creation is not available yet.</p>
             </div>
           </div>
         </div>
@@ -64,7 +64,7 @@ export function Orders() {
               <thead className="bg-gray-50 text-gray-500 font-medium">
                 <tr><th className="px-4 py-3 text-center w-10">#</th><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Items</th><th className="px-5 py-3">Total</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Actions</th></tr>
               </thead>
-              <tbody><tr><td colSpan={6} className="px-5 py-14 text-center text-gray-500"><Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />No data from API</td></tr></tbody>
+              <tbody><tr><td colSpan={6} className="px-5 py-14 text-center text-gray-500"><Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />No data available</td></tr></tbody>
             </table>
           </div>
           <Pagination currentPage={currentPage} totalItems={0} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} onItemsPerPageChange={(size) => { setItemsPerPage(size); setCurrentPage(1); }} />
@@ -73,7 +73,7 @@ export function Orders() {
         <div className="xl:col-span-4 bg-white rounded-xl border border-gray-200 shadow-[0_1px_4px_rgba(0,0,0,0.08)] flex flex-col overflow-hidden">
           <div className="h-full min-h-[280px] flex flex-col items-center justify-center text-center text-gray-500 p-5">
             <Package className="w-12 h-12 text-gray-300 mb-3" />
-            <p className="text-sm font-medium">No data from API</p>
+            <p className="text-sm font-medium">No data available</p>
             <p className="text-xs text-gray-400 mt-1">Order details will appear here</p>
           </div>
         </div>

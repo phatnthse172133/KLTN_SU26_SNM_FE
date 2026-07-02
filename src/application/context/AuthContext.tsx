@@ -7,6 +7,7 @@ import type { UserProfile } from "@/shared/types";
 
 interface AuthContextType {
   isAuthenticated: boolean;
+  isReady: boolean;
   token: string | null;
   refreshToken: string | null;
   user: UserProfile | null;
@@ -22,6 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isReady, setIsReady] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -29,9 +31,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedRefreshToken = localStorage.getItem("refreshToken");
     const storedUser = localStorage.getItem("user");
     if (storedToken) {
+      let parsedUser: UserProfile | null = null;
+      if (storedUser) {
+        try {
+          parsedUser = JSON.parse(storedUser) as UserProfile;
+        } catch {
+          localStorage.removeItem("user");
+        }
+      }
       setToken(storedToken);
       setRefreshToken(storedRefreshToken);
-      setUser(storedUser ? JSON.parse(storedUser) as UserProfile : null);
+      setUser(parsedUser);
       setIsAuthenticated(true);
       accountService.getMyAccount()
         .then((response) => {
@@ -42,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
         .catch(() => undefined);
     }
+    setIsReady(true);
   }, []);
 
   const login = (newToken: string, newRefreshToken?: string | null, newUser?: UserProfile | null) => {
@@ -72,11 +83,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRefreshToken(null);
     setUser(null);
     setIsAuthenticated(false);
-    router.push("/login");
+    router.replace("/login");
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, token, refreshToken, user, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ isAuthenticated, isReady, token, refreshToken, user, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

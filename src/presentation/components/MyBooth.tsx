@@ -20,7 +20,7 @@ import { useBooth } from "@/application/context/BoothContext";
 import { boothService } from "@/application/features/booth/boothService";
 import type { Booth } from "@/shared/types";
 
-const NO_DATA = "No data from API";
+const NO_DATA = "No data available";
 
 type BoothDraft = {
   boothName: string;
@@ -110,7 +110,7 @@ export function MyBooth() {
       });
       await refreshBooths();
       setIsEditOpen(false);
-      setNotice("Booth information updated from API.");
+      setNotice("Booth information updated successfully.");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to update booth.");
     } finally {
@@ -144,7 +144,7 @@ export function MyBooth() {
     return (
       <div className="p-8 pb-12 max-w-7xl mx-auto">
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-sm text-gray-500">
-          Loading data from API...
+          Loading data...
         </div>
       </div>
     );
@@ -344,7 +344,7 @@ export function MyBooth() {
                 <textarea value={draftBooth.description} onChange={(e) => setDraftBooth({ ...draftBooth, description: e.target.value })} rows={4} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500 resize-none" />
               </label>
               <div className="md:col-span-2 rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 text-xs text-gray-500">
-                Booth code, status, zone, package, documents, and featured status are read from API. This owner endpoint only updates editable booth fields.
+                Booth code, status, zone, package, documents, and featured status are managed by the system. This form only updates editable booth fields.
               </div>
             </div>
 
@@ -380,7 +380,7 @@ export function MyBooth() {
                       <div className="aspect-[4/3] bg-gray-100">
                         <ImageWithFallback src={src} alt={`Booth image ${index + 1}`} className="w-full h-full object-cover" />
                       </div>
-                      <div className="p-3 text-xs font-medium text-indigo-600 bg-indigo-50 text-center">Cover image from API</div>
+                      <div className="p-3 text-xs font-medium text-indigo-600 bg-indigo-50 text-center">Cover image</div>
                     </div>
                   ))}
                 </div>

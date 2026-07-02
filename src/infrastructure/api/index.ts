@@ -10,12 +10,25 @@ const getHeaders = (customHeaders?: HeadersInit) => {
 export const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5282/api";
 
 const handleResponse = async <T>(res: Response): Promise<T> => {
+  if (res.status === 204) {
+    return undefined as T;
+  }
+
   const contentType = res.headers.get("content-type");
-  const body = contentType?.includes("application/json") ? await res.json() : await res.text();
+  const rawBody = await res.text();
+  const body = contentType?.includes("application/json") && rawBody
+    ? JSON.parse(rawBody)
+    : rawBody;
 
   if (!res.ok) {
-    const message = typeof body === "object" && body && "message" in body
-      ? String((body as { message?: string }).message)
+    const message = typeof body === "object" && body
+      ? String(
+          (body as { message?: string; Message?: string; title?: string; error?: string }).message
+          ?? (body as { Message?: string }).Message
+          ?? (body as { title?: string }).title
+          ?? (body as { error?: string }).error
+          ?? `HTTP error! status: ${res.status}`
+        )
       : `HTTP error! status: ${res.status}`;
     throw new Error(message);
   }
