@@ -14,8 +14,8 @@ export const accountService = {
   changePassword: async (data: { currentPassword: string; newPassword: string; confirmNewPassword: string }) => {
     return apiClient.post<BaseResponse<object>>("/account/change-password", data);
   },
-  getUsers: async (page = 1, pageSize = 10) => {
-    return apiClient.get<BaseResponse<PaginationResponse<UserProfile>>>(`/account/users${buildQuery({ Page: page, PageSize: pageSize })}`);
+  getUsers: async (page = 1, pageSize = 10, keyword?: string) => {
+    return apiClient.get<BaseResponse<PaginationResponse<UserProfile>>>(`/account/users${buildQuery({ Page: page, PageSize: pageSize, Keyword: keyword })}`);
   },
   getUser: async (userId: string) => {
     return apiClient.get<BaseResponse<UserProfile>>(`/account/users/${userId}`);
