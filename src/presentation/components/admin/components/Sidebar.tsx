@@ -5,9 +5,7 @@ import {
   MapPin,
   Store,
   MessageSquareWarning,
-  ShieldCheck,
   CreditCard,
-  BarChart3,
   Star,
   Bell,
   Zap,
@@ -29,7 +27,7 @@ const menuGroups = [
     label: 'Management',
     items: [
       { id: 'users', label: 'User Management', icon: Users },
-      { id: 'markets', label: 'Night Markets', icon: MapPin },
+      { id: 'markets', label: 'Night Market Management', icon: MapPin },
       { id: 'booths', label: 'Booth Management', icon: Store },
     ],
   },
@@ -45,7 +43,6 @@ const menuGroups = [
     items: [
       { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
       { id: 'notifications', label: 'Notifications', icon: Bell },
-      { id: 'reports', label: 'Statistics', icon: BarChart3 },
     ],
   },
 ];

@@ -11,7 +11,6 @@ import {
   Store,
   MessageSquareWarning,
   CreditCard,
-  BarChart3,
   Star,
   Bell,
   Zap,
@@ -28,7 +27,7 @@ const menuGroups = [
     label: 'Management',
     items: [
       { id: '/admin/accounts', label: 'User Management', icon: Users },
-      { id: '/admin/markets', label: 'Night Markets', icon: MapPin },
+      { id: '/admin/markets', label: 'Night Market Management', icon: MapPin },
       { id: '/admin/booths', label: 'Booth Management', icon: Store },
     ],
   },
@@ -44,7 +43,6 @@ const menuGroups = [
     items: [
       { id: '/admin/subscriptions', label: 'Subscriptions', icon: CreditCard },
       { id: '/admin/notifications', label: 'Notifications', icon: Bell },
-      { id: '/admin/reports', label: 'Statistics', icon: BarChart3 },
     ],
   },
 ];
