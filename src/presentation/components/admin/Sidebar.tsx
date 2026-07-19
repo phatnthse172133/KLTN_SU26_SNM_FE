@@ -14,6 +14,9 @@ import {
   Star,
   Bell,
   Zap,
+  Settings,
+  FileText,
+  Tag,
 } from 'lucide-react';
 
 const menuGroups = [
@@ -43,6 +46,14 @@ const menuGroups = [
     items: [
       { id: '/admin/subscriptions', label: 'Subscriptions', icon: CreditCard },
       { id: '/admin/notifications', label: 'Notifications', icon: Bell },
+    ],
+  },
+  {
+    label: 'AI Management',
+    items: [
+      { id: '/admin/ai-settings', label: 'AI Configuration', icon: Settings },
+      { id: '/admin/ai-logs', label: 'AI Logs', icon: FileText },
+      { id: '/admin/food-tags', label: 'Food Tags', icon: Tag },
     ],
   },
 ];

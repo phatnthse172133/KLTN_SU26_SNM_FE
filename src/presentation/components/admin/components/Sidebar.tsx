@@ -9,6 +9,9 @@ import {
   Star,
   Bell,
   Zap,
+  Settings,
+  FileText,
+  Tag,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -43,6 +46,14 @@ const menuGroups = [
     items: [
       { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
       { id: 'notifications', label: 'Notifications', icon: Bell },
+    ],
+  },
+  {
+    label: 'AI Management',
+    items: [
+      { id: 'ai-settings', label: 'AI Configuration', icon: Settings },
+      { id: 'ai-logs', label: 'AI Logs', icon: FileText },
+      { id: 'food-tags', label: 'Food Tags', icon: Tag },
     ],
   },
 ];
