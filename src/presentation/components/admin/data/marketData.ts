@@ -100,8 +100,8 @@ export const markets: Market[] = [
     id: 1,
     name: 'Ben Thanh Night Market',
     description: 'The busiest night market in central Ho Chi Minh City with hundreds of unique street food stalls.',
-    address: '1 Lê Lợi, Phường Bến Thành, Quận 1, Ho Chi Minh City',
-    location: 'Quận 1, Ho Chi Minh City',
+    address: '1 Le Loi, Ben Thanh Ward, District 1, Ho Chi Minh City',
+    location: 'District 1, Ho Chi Minh City',
     category: 'Street Food Market',
     openingHours: '18:00',
     closingHours: '24:00',
@@ -122,8 +122,8 @@ export const markets: Market[] = [
     id: 2,
     name: 'Phu Quoc Night Market',
     description: 'A paradise of fresh seafood and marine specialties of Phu Quoc Pearl Island.',
-    address: '118 Trần Hưng Đạo, Dương Đông, Phú Quốc, Kiên Giang',
-    location: 'Phú Quốc, Kiên Giang',
+    address: '118 Tran Hung Dao, Duong Dong, Phu Quoc, Kien Giang',
+    location: 'Phu Quoc, Kien Giang',
     category: 'Seafood Market',
     openingHours: '17:00',
     closingHours: '23:00',
@@ -144,8 +144,8 @@ export const markets: Market[] = [
     id: 3,
     name: 'Da Lat Night Market',
     description: 'Famous night market with mountain specialties, fresh vegetables and typical cold atmosphere.',
-    address: '3 Nguyễn Thị Minh Khai, Phường 1, Đà Lạt, Lâm Đồng',
-    location: 'Đà Lạt, Lâm Đồng',
+    address: '3 Nguyen Thi Minh Khai, Ward 1, Da Lat, Lam Dong',
+    location: 'Da Lat, Lam Dong',
     category: 'Mountain Specialty Market',
     openingHours: '17:00',
     closingHours: '23:00',
@@ -166,8 +166,8 @@ export const markets: Market[] = [
     id: 4,
     name: 'Hoi An Night Market',
     description: 'Night market imbued with the cultural identity of the ancient town with traditional Hoi An cuisine.',
-    address: '24 Trần Phú, Phường Minh An, Hội An, Quảng Nam',
-    location: 'Hội An, Quảng Nam',
+    address: '24 Tran Phu, Minh An Ward, Hoi An, Quang Nam',
+    location: 'Hoi An, Quang Nam',
     category: 'Traditional Food Market',
     openingHours: '18:00',
     closingHours: '22:30',
@@ -188,7 +188,6 @@ export const markets: Market[] = [
 
 const categories = ['Fast Food', 'Beverages', 'Seafood', 'Traditional Food', 'Pastries', 'Fruits', 'Grilled Dishes', 'Vegetarian'];
 const plans = ['Basic', 'Premium', 'Featured'];
-const statuses = ['Active', 'Inactive', 'Suspended', 'Pending', 'Approved', 'Rejected', 'Closed'];
 const zones = ['A', 'B', 'C', 'D', 'E'];
 
 const boothNames = [
@@ -205,10 +204,10 @@ const boothNames = [
 ];
 
 const ownerNames = [
-  'Nguyễn Văn An', 'Trần Thị Bình', 'Lê HoàK CườK', 'Phạm Thu DuK', 'Võ Minh Đức',
-  'HoàK Thị Em', 'Đỗ Văn PhoK', 'Bùi Thị GiaK', 'Phan Quốc Huy', 'Mai Thị Hoa',
-  'Đinh Văn Khoa', 'Lý Thị Lan', 'Vũ Minh LoK', 'ĐặK Thu Nga', 'Tô Văn Nam',
-  'Trịnh Thị Oanh', 'DươK Văn Phú', 'Cao Thị Quỳnh', 'NôK Văn Sơn', 'Save Thị Tâm',
+  'Nguyen Van An', 'Tran Thi Binh', 'Le Hoang Cuong', 'Pham Thu Dung', 'Vo Minh Duc',
+  'Hoang Thi Em', 'Do Van Phong', 'Bui Thi Giang', 'Phan Quoc Huy', 'Mai Thi Hoa',
+  'Dinh Van Khoa', 'Ly Thi Lan', 'Vu Minh Long', 'Dang Thu Nga', 'To Van Nam',
+  'Trinh Thi Oanh', 'Duong Van Phu', 'Cao Thi Quynh', 'Ngo Van Son', 'Save Thi Tam',
 ];
 
 const phoneNumbers = [
@@ -556,7 +555,7 @@ export const complaints: Complaint[] = [
     conversations: [
       { senderId: 101, senderName: 'Bob Smith', senderType: 'customer', message: 'Charged 400,000 VND instead of 300,000 VND', time: '12:15' },
       { senderId: 0, senderName: 'Admin', senderType: 'admin', message: 'We have contacted the booth owner.', time: '12:30' },
-      { senderId: 2, senderName: 'Trần Thị Bình', senderType: 'booth_owner', message: 'The price was updated yesterday.', time: '13:00' },
+      { senderId: 2, senderName: 'Tran Thi Binh', senderType: 'booth_owner', message: 'The price was updated yesterday.', time: '13:00' },
     ],
   },
   {
@@ -630,7 +629,7 @@ export const getPendingBooth = () => booths.filter(b => b.status === 'Pending');
 export const getRequestBooth = () => booths.filter(b => b.status === 'Pending' || b.status === 'Approved' || b.status === 'Rejected');
 export const getOpenComplaints = () => complaints.filter(c => c.status === 'Open' || c.status === 'Investigating');
 
-// ─── Reviews ─────────────────────────────────────────────────────────────────
+// Reviews
 
 export interface Review {
   id: string;
@@ -645,21 +644,21 @@ export interface Review {
 }
 
 export const reviews: Review[] = [
-  { id: 'RV-001', customerId: 100, customerName: 'Alice Johnson', boothId: 1, orderId: 'ORD-1001', rating: 5, comment: 'Excellent food! The bánh mì was fresh and delicious. Will definitely come back.', createdAt: '2024-06-01 20:30', updatedAt: '2024-06-01 20:30' },
-  { id: 'RV-002', customerId: 101, customerName: 'Bob Smith', boothId: 3, orderId: 'ORD-1002', rating: 4, comment: 'Very good phở. The broth was rich and flavorful. A little slow but worth the wait.', createdAt: '2024-06-01 19:45', updatedAt: '2024-06-01 19:45' },
+  { id: 'RV-001', customerId: 100, customerName: 'Alice Johnson', boothId: 1, orderId: 'ORD-1001', rating: 5, comment: 'Excellent food. The banh mi was fresh and delicious. Will definitely come back.', createdAt: '2024-06-01 20:30', updatedAt: '2024-06-01 20:30' },
+  { id: 'RV-002', customerId: 101, customerName: 'Bob Smith', boothId: 3, orderId: 'ORD-1002', rating: 4, comment: 'Very good pho. The broth was rich and flavorful. A little slow but worth the wait.', createdAt: '2024-06-01 19:45', updatedAt: '2024-06-01 19:45' },
   { id: 'RV-003', customerId: 102, customerName: 'Carol White', boothId: 7, orderId: 'ORD-1003', rating: 2, comment: 'Disappointing. The food was cold and not as described on the menu. Service was also unfriendly.', createdAt: '2024-06-01 18:20', updatedAt: '2024-06-01 18:20' },
   { id: 'RV-004', customerId: 103, customerName: 'David Lee', boothId: 5, orderId: 'ORD-1004', rating: 5, comment: 'Amazing seafood! Freshest prawns I have ever had at a night market.', createdAt: '2024-06-02 21:15', updatedAt: '2024-06-02 21:15' },
   { id: 'RV-005', customerId: 104, customerName: 'Emma Brown', boothId: 12, orderId: 'ORD-1005', rating: 3, comment: 'Average experience. Food was okay but prices are a bit high compared to other stalls.', createdAt: '2024-06-02 20:00', updatedAt: '2024-06-02 20:00' },
   { id: 'RV-006', customerId: 105, customerName: 'Frank Wilson', boothId: 2, orderId: 'ORD-1006', rating: 1, comment: 'Terrible! Found a hair in my food. Very unhygienic. Will never return.', createdAt: '2024-06-02 19:30', updatedAt: '2024-06-02 19:30' },
-  { id: 'RV-007', customerId: 106, customerName: 'Grace Chen', boothId: 8, orderId: 'ORD-1007', rating: 5, comment: 'Best cà phê sữa đá in the city! The owner is very friendly and the coffee is perfectly brewed.', createdAt: '2024-06-03 10:00', updatedAt: '2024-06-03 10:00' },
+  { id: 'RV-007', customerId: 106, customerName: 'Grace Chen', boothId: 8, orderId: 'ORD-1007', rating: 5, comment: 'Best iced coffee in the city. The owner is very friendly and the coffee is perfectly brewed.', createdAt: '2024-06-03 10:00', updatedAt: '2024-06-03 10:00' },
   { id: 'RV-008', customerId: 107, customerName: 'Henry Davis', boothId: 15, orderId: 'ORD-1008', rating: 4, comment: 'Great vegetarian options. The chay dishes were nutritious and tasty.', createdAt: '2024-06-03 12:30', updatedAt: '2024-06-03 12:30' },
   { id: 'RV-009', customerId: 108, customerName: 'Iris Martinez', boothId: 20, orderId: 'ORD-1009', rating: 3, comment: 'Decent food, nothing spectacular. The stall was a bit messy.', createdAt: '2024-06-03 19:00', updatedAt: '2024-06-03 19:00' },
-  { id: 'RV-010', customerId: 109, customerName: 'Jack Taylor', boothId: 4, orderId: 'ORD-1010', rating: 5, comment: 'Outstanding! The bún chả was authentic and prepared fresh. Very generous portions.', createdAt: '2024-06-04 20:45', updatedAt: '2024-06-04 20:45' },
+  { id: 'RV-010', customerId: 109, customerName: 'Jack Taylor', boothId: 4, orderId: 'ORD-1010', rating: 5, comment: 'Outstanding. The grilled pork noodles were authentic and prepared fresh. Very generous portions.', createdAt: '2024-06-04 20:45', updatedAt: '2024-06-04 20:45' },
   { id: 'RV-011', customerId: 110, customerName: 'Karen Anderson', boothId: 9, orderId: 'ORD-1011', rating: 2, comment: 'Overpriced for what you get. The portion was small and the taste was mediocre.', createdAt: '2024-06-04 18:15', updatedAt: '2024-06-04 18:15' },
-  { id: 'RV-012', customerId: 111, customerName: 'Leo Thompson', boothId: 6, orderId: 'ORD-1012', rating: 4, comment: 'Good nem nướK, nicely grilled with great dipping sauce. Would recommend.', createdAt: '2024-06-05 21:00', updatedAt: '2024-06-05 21:00' },
+  { id: 'RV-012', customerId: 111, customerName: 'Leo Thompson', boothId: 6, orderId: 'ORD-1012', rating: 4, comment: 'Good grilled pork rolls, nicely grilled with great dipping sauce. Would recommend.', createdAt: '2024-06-05 21:00', updatedAt: '2024-06-05 21:00' },
 ];
 
-// ─── Subscription Packages ────────────────────────────────────────────────────
+// Subscription Packages
 
 export interface SubscriptionPackage {
   id: number;
@@ -733,7 +732,7 @@ export const subscriptionPackages: SubscriptionPackage[] = [
   },
 ];
 
-// ─── Booth Subscriptions ──────────────────────────────────────────────────────
+// Booth Subscriptions
 
 export interface BoothSubscription {
   id: number;
@@ -782,7 +781,7 @@ export const boothSubscription: BoothSubscription[] = booths
     };
   });
 
-// ─── Promotional Packages ─────────────────────────────────────────────────────
+// Promotional Packages
 
 export interface PromotionalPackage {
   id: number;
@@ -861,14 +860,14 @@ export interface BoothPromotionalPackage {
 }
 
 export const boothPromotionalPackages: BoothPromotionalPackage[] = [
-  { id: 1, boothId: 1, boothName: 'Saigon Banh Mi', boothOwner: 'Nguyễn Văn An', promotionalPackageId: 1, packageName: '7-Day Spotlight', startDate: '2024-06-01', endDate: '2024-06-07', price: 350000, status: 'Active', createdAt: '2024-06-01', updatedAt: '2024-06-01' },
-  { id: 2, boothId: 3, boothName: 'Traditional Beef Pho', boothOwner: 'Lê HoàK CườK', promotionalPackageId: 3, packageName: 'Monthly Boost', startDate: '2024-05-01', endDate: '2024-05-31', price: 1200000, status: 'Expired', createdAt: '2024-05-01', updatedAt: '2024-05-31' },
-  { id: 3, boothId: 5, boothName: 'Broken Rice with Pork', boothOwner: 'Võ Minh Đức', promotionalPackageId: 2, packageName: 'Holiday Campaign', startDate: '2024-06-10', endDate: '2024-06-12', price: 800000, status: 'Scheduled', createdAt: '2024-06-05', updatedAt: '2024-06-05' },
-  { id: 4, boothId: 8, boothName: 'Western Vietnamese Crepe', boothOwner: 'Bùi Thị GiaK', promotionalPackageId: 1, packageName: '7-Day Spotlight', startDate: '2024-05-20', endDate: '2024-05-26', price: 350000, status: 'Expired', createdAt: '2024-05-20', updatedAt: '2024-05-26' },
-  { id: 5, boothId: 12, boothName: 'Bubble Tea', boothOwner: 'Lý Thị Lan', promotionalPackageId: 3, packageName: 'Monthly Boost', startDate: '2024-06-01', endDate: '2024-06-30', price: 1200000, status: 'Active', createdAt: '2024-06-01', updatedAt: '2024-06-01' },
+  { id: 1, boothId: 1, boothName: 'Saigon Banh Mi', boothOwner: 'Nguyen Van An', promotionalPackageId: 1, packageName: '7-Day Spotlight', startDate: '2024-06-01', endDate: '2024-06-07', price: 350000, status: 'Active', createdAt: '2024-06-01', updatedAt: '2024-06-01' },
+  { id: 2, boothId: 3, boothName: 'Traditional Beef Pho', boothOwner: 'Le Hoang Cuong', promotionalPackageId: 3, packageName: 'Monthly Boost', startDate: '2024-05-01', endDate: '2024-05-31', price: 1200000, status: 'Expired', createdAt: '2024-05-01', updatedAt: '2024-05-31' },
+  { id: 3, boothId: 5, boothName: 'Broken Rice with Pork', boothOwner: 'Vo Minh Duc', promotionalPackageId: 2, packageName: 'Holiday Campaign', startDate: '2024-06-10', endDate: '2024-06-12', price: 800000, status: 'Scheduled', createdAt: '2024-06-05', updatedAt: '2024-06-05' },
+  { id: 4, boothId: 8, boothName: 'Western Vietnamese Crepe', boothOwner: 'Bui Thi Giang', promotionalPackageId: 1, packageName: '7-Day Spotlight', startDate: '2024-05-20', endDate: '2024-05-26', price: 350000, status: 'Expired', createdAt: '2024-05-20', updatedAt: '2024-05-26' },
+  { id: 5, boothId: 12, boothName: 'Bubble Tea', boothOwner: 'Ly Thi Lan', promotionalPackageId: 3, packageName: 'Monthly Boost', startDate: '2024-06-01', endDate: '2024-06-30', price: 1200000, status: 'Active', createdAt: '2024-06-01', updatedAt: '2024-06-01' },
 ];
 
-// ─── Notifications ────────────────────────────────────────────────────────────
+// Notifications
 
 export interface Notification {
   id: number;
@@ -883,7 +882,7 @@ export interface Notification {
 
 export const notifications: Notification[] = [
   { id: 1, title: 'Welcome to Summer 2024!', content: 'Discover new booths and excitiK offers this summer. Hundreds of delicious street food options are waiting for you at night markets across the country!', targetAudience: 'All', status: 'Published', createdAt: '2024-06-01 08:00', updatedAt: '2024-06-01 08:00' },
-  { id: 2, title: 'Scheduled System Maintenance', content: 'The platform will undergo maintenance from 2:00 AM – 4:00 AM on June 5, 2024. The app will be temporarily unavailable during this window. We apologize for any inconvenience.', targetAudience: 'All', status: 'Published', createdAt: '2024-06-03 14:00', updatedAt: '2024-06-03 14:00' },
+  { id: 2, title: 'Scheduled System Maintenance', content: 'The platform will undergo maintenance from 2:00 AM - 4:00 AM on June 5, 2024. The app will be temporarily unavailable during this window. We apologize for any inconvenience.', targetAudience: 'All', status: 'Published', createdAt: '2024-06-03 14:00', updatedAt: '2024-06-03 14:00' },
   { id: 3, title: 'Special Offer for New Booths', content: 'Register a new booth in June and receive 1 free month of the Premium plan! A great opportunity to kickstart your business on the platform.', targetAudience: 'Booth Owners', status: 'Published', createdAt: '2024-06-01 09:00', updatedAt: '2024-06-01 09:00' },
   { id: 4, title: 'Payment Policy Update', content: 'Starting July 1, 2024, we will support additional payment methods including VNPAY, ZaloPay, and MoMo. Please update the app to access these new options.', targetAudience: 'All', status: 'Draft', createdAt: '2024-06-04 11:00', updatedAt: '2024-06-04 11:00' },
   { id: 5, title: 'Subscription Renewal Reminder', content: 'Your subscription plan expires in 7 days. Renew now to avoid service interruption and maintain your listing visibility on the platform.', targetAudience: 'Booth Owners', status: 'Scheduled', scheduledAt: '2024-06-07 08:00', createdAt: '2024-06-05 10:00', updatedAt: '2024-06-05 10:00' },

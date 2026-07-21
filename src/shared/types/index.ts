@@ -34,7 +34,10 @@ export interface UserProfile {
 export interface Booth {
   id: string;
   nightMarketId: string;
+  nightMarketName?: string | null;
   boothOwnerId: string;
+  boothOwnerName?: string | null;
+  boothOwnerEmail?: string | null;
   zoneId?: string | null;
   boothName: string;
   boothCode?: string | null;
@@ -42,6 +45,7 @@ export interface Booth {
   phoneNumber?: string | null;
   slotNumber?: string | null;
   thumbnailUrl?: string | null;
+  paymentQrImage?: string | null;
   mapPositionX?: number | null;
   mapPositionY?: number | null;
   openTime?: string | null;
@@ -61,10 +65,15 @@ export interface NightMarket {
   openingHours?: string | null;
   closingHours?: string | null;
   totalBooth: number;
+  activeBooth?: number;
+  boundaryWidthMeters?: number | null;
+  boundaryHeightMeters?: number | null;
   mapWidth?: number | null;
   mapHeight?: number | null;
   thumbnailUrl?: string | null;
   status: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Zone {
@@ -81,12 +90,28 @@ export interface Zone {
 export interface SubscriptionPackage {
   id: string;
   packageName: string;
+  code?: string | null;
   price: number;
   durationDays: number;
+  type: number;
   description?: string | null;
+  entitlements?: string | null;
+  features: string[];
   status: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PackagePolicy {
+  id: string;
+  packageId: string;
+  version: string;
+  title: string;
+  contentJson: string;
+  contentMarkdown?: string | null;
+  effectiveFrom: string;
+  isActive: boolean;
+  createdAt: string;
 }
 
 export interface FoodCategory {
@@ -116,8 +141,11 @@ export interface FoodItem {
 export interface Review {
   id: string;
   boothId: string;
+  boothName?: string | null;
   customerId: string;
+  customerName?: string | null;
   orderId: string;
+  orderCode?: string | null;
   rating: number;
   content?: string | null;
   imageUrl?: string | null;
@@ -153,9 +181,10 @@ export interface Complaint {
 export interface BoothRegistration {
   id: string;
   ownerId: string;
+  ownerName?: string;
+  ownerEmail?: string;
   requestedNightMarketId: string;
   preferredZoneId?: string | null;
-  preferredLayoutNodeId?: string | null;
   boothName: string;
   description?: string | null;
   phone?: string | null;
@@ -170,20 +199,3 @@ export interface BoothRegistration {
     verificationStatus: string;
   }[];
 }
-
-export interface Complaint {
-  id: string;
-  customerId: string;
-  boothId: string;
-  orderId: string;
-  title: string;
-  description: string;
-  adminResponse?: string | null;
-  status: string;
-  resolutionAction?: string | null;
-  policyViolation?: string | null;
-  imageUrls: string[];
-  createdAt: string;
-  updatedAt: string;
-}
-

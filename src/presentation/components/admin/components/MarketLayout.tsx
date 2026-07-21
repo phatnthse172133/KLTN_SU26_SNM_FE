@@ -1,7 +1,7 @@
 "use client";
-import { Store, X, MapPin, Search, Sliders, Settings, PlusCircle, Footprints, Trash, Info, Check, Eye, HelpCircle } from 'lucide-react';
-import { Market, Booth } from '../data/marketData';
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { Store, X, Search, Sliders, Settings, PlusCircle, Footprints, Trash, Info, Check, HelpCircle } from 'lucide-react';
+import { Booth } from '../data/marketData';
+import { useState, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 interface MarketLayoutProps {
@@ -14,7 +14,7 @@ export function MarketLayout({ market, booths, onClose }: MarketLayoutProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [selectedBooth, setSelectedBooth] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isConfiguring, setIsConfiguring] = useState(true); // default to true to show full configurator experience
+  const [isConfiguring] = useState(true); // default to true to show full configurator experience
   const [configTab, setConfigTab] = useState<'map' | 'booths' | 'paths'>('booths');
   const [mapWidth, setMapWidth] = useState(market.mapWidth || 100);
   const [mapHeight, setMapHeight] = useState(market.mapHeight || 120);
@@ -38,7 +38,7 @@ export function MarketLayout({ market, booths, onClose }: MarketLayoutProps) {
     booths.forEach((b, idx) => {
       const zone = b.zone || 'A';
       const slot = (b as any).slotNumber || (idx % 4 + 1);
-      
+
       // Let's arrange them neatly into zone coordinates
       let baseX = 10;
       let baseY = 10;
@@ -128,22 +128,22 @@ export function MarketLayout({ market, booths, onClose }: MarketLayoutProps) {
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!draggingItem || !canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
-    
+
     // Delta in pixels
     const deltaX = e.clientX - draggingItem.startX;
     const deltaY = e.clientY - draggingItem.startY;
-    
+
     // Delta in percentages
     const pctDeltaX = (deltaX / rect.width) * 100;
     const pctDeltaY = (deltaY / rect.height) * 100;
-    
+
     let newX = Math.round(draggingItem.startCoordX + pctDeltaX);
     let newY = Math.round(draggingItem.startCoordY + pctDeltaY);
-    
+
     // Constraints
     newX = Math.max(0, Math.min(94, newX));
     newY = Math.max(0, Math.min(94, newY));
-    
+
     if (draggingItem.type === 'booth') {
       setBoothCoords(prev => ({
         ...prev,
@@ -168,14 +168,14 @@ export function MarketLayout({ market, booths, onClose }: MarketLayoutProps) {
     const rect = canvasRef.current.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
-    
+
     const pctX = Math.round((clickX / rect.width) * 100);
     const pctY = Math.round((clickY / rect.height) * 100);
 
     if (designMode === 'place') {
       const nextId = Math.max(...localBooths.map(b => b.id), 0) + 1;
       const nextSlot = Math.max(...localBooths.map(b => (b as any).slotNumber || 0), 0) + 1;
-      
+
       const newBoothSlot: any = {
         id: nextId,
         name: `Booth Slot #${nextSlot}`,
@@ -221,7 +221,7 @@ export function MarketLayout({ market, booths, onClose }: MarketLayoutProps) {
   };
 
   const handleSaveConfig = () => {
-    setToast("Market layout configuration successfully saved to server!");
+    setToast("Market layout configuration saved successfully.");
     setTimeout(() => setToast(null), 3000);
   };
 
@@ -270,7 +270,7 @@ export function MarketLayout({ market, booths, onClose }: MarketLayoutProps) {
             </div>
             <div>
               <h3 style={{ color: '#111827', fontWeight: 800, fontSize: '1.25rem', margin: 0 }}>Interactive Layout & Map Configurator</h3>
-              <p className="text-sm" style={{ color: '#64748B', margin: '2px 0 0' }}>{market.name} · Design Mode: {designMode.toUpperCase()}</p>
+              <p className="text-sm" style={{ color: '#64748B', margin: '2px 0 0' }}>{market.name} Â· Design Mode: {designMode.toUpperCase()}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -306,10 +306,10 @@ export function MarketLayout({ market, booths, onClose }: MarketLayoutProps) {
 
         {/* Content Area */}
         <div className="flex-1 flex overflow-hidden">
-          
+
           {/* Main Map Canvas Area */}
           <div className="flex-1 flex flex-col overflow-hidden" style={{ background: '#F8FAFC' }}>
-            
+
             {/* Legend & Filter Bar */}
             <div
               className="px-6 py-4 flex-shrink-0 flex items-center justify-between gap-4 flex-wrap"
@@ -367,13 +367,13 @@ export function MarketLayout({ market, booths, onClose }: MarketLayoutProps) {
             </div>
 
             {/* Interactive Grid Canvas container */}
-            <div 
+            <div
               className="flex-1 overflow-auto p-8 flex items-center justify-center"
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
             >
-              <div 
+              <div
                 ref={canvasRef}
                 onClick={handleCanvasClick}
                 className="relative shadow-2xl border-4 border-slate-700 bg-white select-none transition-all duration-300"
@@ -453,8 +453,8 @@ export function MarketLayout({ market, booths, onClose }: MarketLayoutProps) {
                         background: getBoothBgColor(booth, isSelected, isSearchMatch),
                         borderColor: isSelected ? '#6366F1' : getBoothPlanBorder(booth),
                         borderWidth: isSelected ? '2px' : '1px',
-                        boxShadow: isSelected 
-                          ? '0 10px 15px -3px rgba(99, 102, 241, 0.3), 0 4px 6px -4px rgba(99, 102, 241, 0.3)' 
+                        boxShadow: isSelected
+                          ? '0 10px 15px -3px rgba(99, 102, 241, 0.3), 0 4px 6px -4px rgba(99, 102, 241, 0.3)'
                           : '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
                         cursor: designMode === 'move' ? 'move' : 'pointer',
                         zIndex: isSelected ? 10 : 3
@@ -499,17 +499,17 @@ export function MarketLayout({ market, booths, onClose }: MarketLayoutProps) {
                       {selectedBooth.status}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
-                      Zone {selectedBooth.zone} · Slot #{selectedBooth.slotNumber}
+                      Zone {selectedBooth.zone} Â· Slot #{selectedBooth.slotNumber}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-1" style={{ margin: 0 }}>
-                    Category: <strong>{selectedBooth.category}</strong> · Owner: <strong>{selectedBooth.owner}</strong> · Phone: <strong>{selectedBooth.phone}</strong>
+                    Category: <strong>{selectedBooth.category}</strong> Â· Owner: <strong>{selectedBooth.owner}</strong> Â· Phone: <strong>{selectedBooth.phone}</strong>
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1.5">
                   <span className="text-xs font-medium text-slate-400">Position Coordinates</span>
                   <span className="text-sm font-bold text-slate-700 fontFamily-monospace bg-slate-50 border border-slate-200 px-2 py-0.5 rounded">
-                    X: {boothCoords[selectedBooth.id]?.x || 0}% · Y: {boothCoords[selectedBooth.id]?.y || 0}%
+                    X: {boothCoords[selectedBooth.id]?.x || 0}% Â· Y: {boothCoords[selectedBooth.id]?.y || 0}%
                   </span>
                 </div>
               </div>
@@ -577,7 +577,7 @@ export function MarketLayout({ market, booths, onClose }: MarketLayoutProps) {
 
               {/* Tab Contents */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                
+
                 {/* Map Size Tab */}
                 {configTab === 'map' && (
                   <div className="space-y-4">
@@ -611,7 +611,7 @@ export function MarketLayout({ market, booths, onClose }: MarketLayoutProps) {
                     </div>
 
                     <div style={{ background: '#F8FAFC', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #E2E8F0', fontSize: '11px', color: '#64748B' }}>
-                      ⚡ Grid cells are calculated as 2m x 2m blocks.
+                      âš¡ Grid cells are calculated as 2m x 2m blocks.
                     </div>
 
                     <button
@@ -644,8 +644,8 @@ export function MarketLayout({ market, booths, onClose }: MarketLayoutProps) {
                           { key: 'place', label: 'Place Mode (Click to Add)', desc: 'Click on grid to insert booth' },
                           { key: 'view', label: 'View Mode (Inspect)', desc: 'Click to select and view info' }
                         ].map(m => (
-                          <label 
-                            key={m.key} 
+                          <label
+                            key={m.key}
                             className="flex items-start gap-2.5 p-2.5 border rounded-lg cursor-pointer transition-all"
                             style={{
                               borderColor: designMode === m.key ? '#C7D2FE' : '#E2E8F0',
@@ -670,13 +670,13 @@ export function MarketLayout({ market, booths, onClose }: MarketLayoutProps) {
 
                     {designMode === 'place' && (
                       <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '0.5rem', padding: '0.75rem', fontSize: '11px', color: '#B45309' }}>
-                        💡 <strong>Place Mode Active:</strong> Hover over the map canvas and click on any grid intersection to place a new booth slot.
+                        ðŸ’¡ <strong>Place Mode Active:</strong> Hover over the map canvas and click on any grid intersection to place a new booth slot.
                       </div>
                     )}
 
                     {designMode === 'move' && (
                       <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '0.5rem', padding: '0.75rem', fontSize: '11px', color: '#2563EB' }}>
-                        👉 <strong>Drag Mode Active:</strong> Click and hold any booth slot box, then move your mouse to drag it to a new location.
+                        ðŸ‘‰ <strong>Drag Mode Active:</strong> Click and hold any booth slot box, then move your mouse to drag it to a new location.
                       </div>
                     )}
 
@@ -729,7 +729,7 @@ export function MarketLayout({ market, booths, onClose }: MarketLayoutProps) {
                             <div>
                               <p className="font-bold text-slate-700" style={{ margin: 0 }}>{w.name}</p>
                               <p className="text-[10px] text-slate-400 mt-0.5" style={{ margin: 0 }}>
-                                Pos: ({w.x}%, {w.y}%) · Size: {w.isVertical ? `${w.w}m wide` : `${w.h}m tall`}
+                                Pos: ({w.x}%, {w.y}%) Â· Size: {w.isVertical ? `${w.w}m wide` : `${w.h}m tall`}
                               </p>
                             </div>
                             <div className="flex items-center gap-1">

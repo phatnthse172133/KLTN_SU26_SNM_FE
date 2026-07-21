@@ -11,8 +11,10 @@ export const reviewService = {
   getMine: async (page = 1, pageSize = 10) => {
     return apiClient.get<BaseResponse<PaginationResponse<Review>>>(`/reviews/mine${buildQuery({ Page: page, PageSize: pageSize })}`);
   },
-  getAll: async (page = 1, pageSize = 10) => {
-    return apiClient.get<BaseResponse<PaginationResponse<Review>>>(`/reviews${buildQuery({ Page: page, PageSize: pageSize })}`);
+  getAll: async (page = 1, pageSize = 10, filters?: { rating?: number; isVisible?: boolean; boothId?: string; keyword?: string }) => {
+    return apiClient.get<BaseResponse<PaginationResponse<Review>>>(
+      `/reviews${buildQuery({ Page: page, PageSize: pageSize, rating: filters?.rating, isVisible: filters?.isVisible, boothId: filters?.boothId, keyword: filters?.keyword })}`
+    );
   },
   updateVisibility: async (reviewId: string, isVisible: boolean) => {
     return apiClient.patch<BaseResponse<Review>>(`/reviews/${reviewId}/visibility`, { isVisible });

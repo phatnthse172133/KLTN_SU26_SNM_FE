@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { Search, Bell, ChevronDown } from 'lucide-react';
+import { Search, ChevronDown, User, LogOut, Mail, Shield } from 'lucide-react';
 import { useAuth } from '@/application/context/AuthContext';
 
 const getInitials = (name?: string | null) => {
@@ -15,7 +15,9 @@ const getInitials = (name?: string | null) => {
 // ============================================================================
 export function Header() {
   const [searchFocused, setSearchFocused] = useState(false);
-  const { user } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const { user, logout } = useAuth();
 
   return (
     <header
@@ -51,39 +53,101 @@ export function Header() {
 
       {/* Right side */}
       <div className="flex items-center gap-3">
-        {/* Bell */}
-        <button
-          className="relative p-2 rounded-lg transition-all hover:bg-gray-50"
-          style={{ background: '#FFFFFF', border: '1px solid #E5E7EB' }}
-        >
-          <Bell className="w-4 h-4" style={{ color: '#64748B' }} />
-          <span
-            className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
-            style={{ background: '#EF4444', boxShadow: '0 0 6px #EF4444' }}
-          />
-        </button>
-
-        {/* Divider */}
-        <div className="w-px h-6" style={{ background: '#E5E7EB' }} />
 
         {/* User menu */}
-        <div
-          className="flex items-center gap-3 px-3 py-1.5 rounded-lg cursor-pointer transition-all hover:bg-gray-50"
-          style={{ background: '#FFFFFF', border: '1px solid #E5E7EB' }}
-        >
-          <div
-            className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 overflow-hidden"
-            style={{ background: '#2563EB' }}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((open) => !open)}
+            className="flex items-center gap-3 px-3 py-1.5 rounded-lg cursor-pointer transition-all hover:bg-gray-50"
+            style={{ background: '#FFFFFF', border: '1px solid #E5E7EB' }}
           >
-            {user?.avatarUrl ? <img src={user.avatarUrl} alt={user.fullName} className="w-full h-full object-cover" /> : getInitials(user?.fullName)}
-          </div>
-          <div className="text-sm">
-            <div className="font-medium truncate max-w-[120px]" style={{ color: '#111827' }}>{user?.fullName ?? "Admin User"}</div>
-            <div className="text-xs truncate max-w-[120px]" style={{ color: '#64748B' }}>{user?.role ?? "Super Admin"}</div>
-          </div>
-          <ChevronDown className="w-3.5 h-3.5" style={{ color: '#475569' }} />
+            <div
+              className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 overflow-hidden"
+              style={{ background: '#2563EB' }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {user?.avatarUrl ? <img src={user.avatarUrl} alt={user.fullName} className="w-full h-full object-cover" /> : getInitials(user?.fullName)}
+            </div>
+            <div className="text-sm text-left">
+              <div className="font-medium truncate max-w-[120px]" style={{ color: '#111827' }}>{user?.fullName ?? "Admin User"}</div>
+              <div className="text-xs truncate max-w-[120px]" style={{ color: '#64748B' }}>{user?.role ?? "Super Admin"}</div>
+            </div>
+            <ChevronDown className="w-3.5 h-3.5" style={{ color: '#475569', transform: menuOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }} />
+          </button>
+
+          {menuOpen && (
+            <div
+              className="absolute right-0 mt-2 w-64 rounded-xl overflow-hidden"
+              style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', boxShadow: '0 18px 48px rgba(15,23,42,0.16)', zIndex: 60 }}
+            >
+              <div className="px-4 py-3" style={{ borderBottom: '1px solid #E5E7EB' }}>
+                <div className="font-semibold truncate" style={{ color: '#111827', fontSize: '0.875rem' }}>{user?.fullName ?? 'Admin User'}</div>
+                <div className="truncate" style={{ color: '#64748B', fontSize: '0.75rem', marginTop: '2px' }}>{user?.email ?? 'No data available'}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setProfileOpen(true); setMenuOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50"
+                style={{ color: '#111827', fontSize: '0.875rem', border: 'none', background: 'transparent', cursor: 'pointer' }}
+              >
+                <User className="w-4 h-4" style={{ color: '#64748B' }} />
+                Profile
+              </button>
+              <button
+                type="button"
+                onClick={() => { setMenuOpen(false); logout(); }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-red-50"
+                style={{ color: '#EF4444', fontSize: '0.875rem', border: 'none', background: 'transparent', cursor: 'pointer', borderTop: '1px solid #F1F5F9' }}
+              >
+                <LogOut className="w-4 h-4" />
+                Logout
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {profileOpen && (
+        <div
+          className="fixed inset-0 flex items-center justify-center p-4"
+          style={{ zIndex: 9999, background: 'rgba(15,23,42,0.45)' }}
+          onClick={() => setProfileOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl"
+            style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', boxShadow: '0 28px 80px rgba(15,23,42,0.25)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5" style={{ borderBottom: '1px solid #E5E7EB' }}>
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-full flex items-center justify-center text-base font-bold text-white overflow-hidden" style={{ background: '#2563EB' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {user?.avatarUrl ? <img src={user.avatarUrl} alt={user.fullName} className="w-full h-full object-cover" /> : getInitials(user?.fullName)}
+                </div>
+                <div>
+                  <h3 className="m-0 text-lg font-semibold" style={{ color: '#111827' }}>{user?.fullName ?? 'Admin User'}</h3>
+                  <p className="m-0 text-sm" style={{ color: '#64748B' }}>{user?.role ?? 'Admin'}</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="flex items-center gap-3 text-sm" style={{ color: '#475569' }}>
+                <Mail className="w-4 h-4" />
+                <span>{user?.email ?? 'No data available'}</span>
+              </div>
+              <div className="flex items-center gap-3 text-sm" style={{ color: '#475569' }}>
+                <Shield className="w-4 h-4" />
+                <span>{user?.status ?? 'No data available'}</span>
+              </div>
+            </div>
+            <div className="p-5 pt-0 flex gap-3">
+              <button onClick={() => setProfileOpen(false)} className="flex-1 rounded-lg px-4 py-2 font-medium" style={{ border: '1px solid #E5E7EB', background: '#FFFFFF', color: '#111827' }}>Close</button>
+              <button onClick={logout} className="flex-1 rounded-lg px-4 py-2 font-medium" style={{ border: 'none', background: '#EF4444', color: '#FFFFFF' }}>Logout</button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

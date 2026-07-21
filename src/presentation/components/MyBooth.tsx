@@ -100,7 +100,7 @@ export function MyBooth() {
     setSaving(true);
     setError("");
     try {
-      await boothService.updateMyBooth(selectedBooth.id, {
+      await boothService.updateMyBooth({
         boothName: draftBooth.boothName,
         description: draftBooth.description || null,
         phoneNumber: draftBooth.phoneNumber || null,

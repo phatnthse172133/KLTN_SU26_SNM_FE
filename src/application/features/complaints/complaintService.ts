@@ -14,7 +14,7 @@ export const complaintService = {
   getByBooth: async (boothId: string, page = 1, pageSize = 10) => {
     return apiClient.get<BaseResponse<PaginationResponse<Complaint>>>(`/complaints/booths/${boothId}${buildQuery({ Page: page, PageSize: pageSize })}`);
   },
-  updateStatus: async (complaintId: string, data: { status: string; adminResponse?: string | null; resolutionAction?: string | null; policyViolation?: string | null }) => {
+  updateStatus: async (complaintId: string, data: { status: number; adminResponse?: string | null; resolutionAction?: number | null; policyViolation?: string | null }) => {
     return apiClient.put<BaseResponse<Complaint>>(`/complaints/${complaintId}/status`, data);
   },
 };

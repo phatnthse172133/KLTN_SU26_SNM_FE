@@ -1,9 +1,7 @@
-import { BoothManagement } from "@/presentation/components/admin/BoothManagement";
+"use client";
 
-export const metadata = {
-  title: "Booth Management | Smart Night Market",
-};
+import { ModerationManagement } from "@/presentation/components/admin/ModerationManagement";
 
-export default function AdminBoothsPage() {
-  return <BoothManagement />;
+export default function BoothsPage() {
+  return <ModerationManagement targetType="Booth" />;
 }

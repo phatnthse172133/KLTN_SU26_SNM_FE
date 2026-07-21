@@ -5,7 +5,6 @@ import {
   MapPin,
   Store,
   MessageSquareWarning,
-  ShieldCheck,
   CreditCard,
   BarChart3,
   Star,

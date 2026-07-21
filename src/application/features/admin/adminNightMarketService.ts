@@ -76,6 +76,18 @@ export const adminNightMarketService = {
    * Backend: DELETE /api/night-markets/{id}
    */
   deleteNightMarket: async (id: string) => {
-    return apiClient.delete<BaseResponse<any>>(`/night-markets/${id}`);
+    return apiClient.delete<BaseResponse<void>>(`/night-markets/${id}`);
+  },
+
+  getDeletionImpact: async (id: string) => {
+    return apiClient.get<BaseResponse<DeletionImpactResponse>>(`/night-markets/${id}/deletion-impact`);
   },
 };
+
+export interface DeletionImpactResponse {
+  activeBooths: number;
+  openOrders: number;
+  pendingRegistrations: number;
+  layouts: number;
+  zones: number;
+}

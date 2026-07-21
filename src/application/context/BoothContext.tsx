@@ -18,11 +18,7 @@ export function BoothProvider({ children }: { children: ReactNode }) {
   const [selectedBooth, setSelectedBooth] = useState<Booth | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    refreshBooths();
-  }, []);
-
-  const refreshBooths = async () => {
+  async function refreshBooths() {
     setLoading(true);
     if (typeof window !== "undefined" && !localStorage.getItem("token")) {
       setBooths([]);
@@ -32,7 +28,8 @@ export function BoothProvider({ children }: { children: ReactNode }) {
     }
     try {
       const res = await boothService.getMyBooths();
-      const boothList = res.data.items ?? [];
+      // The Booth Owner endpoint returns one owned booth, not a paged collection.
+      const boothList = res.data ? [res.data] : [];
       setBooths(boothList);
       setSelectedBooth((current) => boothList.find((booth) => booth.id === current?.id) ?? boothList[0] ?? null);
     } catch {
@@ -41,7 +38,11 @@ export function BoothProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  useEffect(() => {
+    void refreshBooths();
+  }, []);
 
   return (
     <BoothContext.Provider value={{ selectedBooth, booths, setSelectedBooth, loading, refreshBooths }}>
