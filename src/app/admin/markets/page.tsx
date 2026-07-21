@@ -1,9 +1,7 @@
-import { NightMarkets } from "@/presentation/components/admin/NightMarkets";
+"use client";
 
-export const metadata = {
-  title: "Night Markets Management | Admin | Smart Night Market",
-};
+import { ModerationManagement } from "@/presentation/components/admin/ModerationManagement";
 
-export default function NightMarketsPage() {
-  return <NightMarkets />;
+export default function MarketsPage() {
+  return <ModerationManagement targetType="NightMarket" />;
 }

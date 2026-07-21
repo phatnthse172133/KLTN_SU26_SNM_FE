@@ -1,58 +1,89 @@
 "use client";
-import { AlertCircle, User as UserIcon, Store, Calendar, Image as ImageIcon, AlertTriangle, Phone, Mail, MapPin, Package, Send, Search, CheckCircle, XCircle, Clock } from 'lucide-react';
-import { useState } from 'react';
+import { AlertCircle, User as UserIcon, Store, Calendar, Image as ImageIcon, Search, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
 import { Modal } from './components/Modal';
 import { adminComplaintService, ComplaintStatus, ComplaintResolutionAction } from '@/application/features/admin/adminComplaintService';
-import type { Complaint } from '@/shared/types';
-import { useEffect } from 'react';
+import { adminAccountService } from '@/application/features/admin/adminAccountService';
+import { adminBoothService } from '@/application/features/admin/adminBoothService';
+import { adminNightMarketService } from '@/application/features/admin/adminNightMarketService';
+import type { Complaint, UserProfile } from '@/shared/types';
 import { Pagination } from './components/Pagination';
+import { ImageWithFallback } from '../ImageWithFallback';
+import { getErrorMessage } from '@/shared/errors/errorMapper';
 
-type StatusTab = 'all' | 'Open' | 'Investigating' | 'Resolved' | 'Closed';
-type ActionMode = null | 'resolve' | 'warn' | 'suspend';
+type StatusTab = 'all' | 'Resolved' | 'Rejected';
+type ActionMode = null | 'resolve' | 'reject';
 
-interface LocalMessage {
-  senderName: string;
-  senderType: string;
-  message: string;
-  time: string;
+interface BoothInfo {
+  id: string;
+  boothName: string;
+  boothOwnerId: string;
+  boothOwnerName?: string;
+  nightMarketId?: string;
+  nightMarketName?: string;
+  slotNumber?: string;
 }
 
 const statusTabs: { key: StatusTab; label: string }[] = [
   { key: 'all', label: 'All' },
-  { key: 'Open', label: 'Open' },
-  { key: 'Investigating', label: 'Investigating' },
   { key: 'Resolved', label: 'Resolved' },
-  { key: 'Closed', label: 'Closed' },
+  { key: 'Rejected', label: 'Rejected' },
 ];
 
 const statusPillStyle: Record<string, React.CSSProperties> = {
-  Open: { background: 'rgba(239,68,68,0.15)', color: '#F87171', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '0.75rem', fontWeight: 500 },
-  Investigating: { background: 'rgba(59,130,246,0.15)', color: '#60A5FA', border: '1px solid rgba(59,130,246,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '0.75rem', fontWeight: 500 },
+  Pending: { background: 'rgba(245,158,11,0.15)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '0.75rem', fontWeight: 500 },
   Resolved: { background: 'rgba(16,185,129,0.15)', color: '#34D399', border: '1px solid rgba(16,185,129,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '0.75rem', fontWeight: 500 },
-  Closed: { background: 'rgba(100,116,139,0.15)', color: '#64748B', border: '1px solid rgba(100,116,139,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '0.75rem', fontWeight: 500 },
+  Rejected: { background: 'rgba(239,68,68,0.15)', color: '#F87171', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '0.75rem', fontWeight: 500 },
 };
 
+const resolutionActionLabels: Record<string, string> = {
+  'NoViolation': 'Resolved without penalty',
+  'Warning': 'Warning issued',
+  'SuspendBooth': 'Booth suspended',
+  'CloseBooth': 'Booth closed',
+};
 
-export function Complaints() {
-  
-  const [complaintsList, setComplaintsList] = useState<Complaint[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const fetchComplaints = async () => {
-    try {
-      setLoading(true);
-      const res = await adminComplaintService.getAllComplaints(1, 1000);
-      if (res.success) {
-        setComplaintsList(res.data.items);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+const mapBackendStatus = (backendStatus: unknown): string => {
+  const map: Record<string, string> = {
+    '0': 'Pending',
+    '1': 'Resolved',
+    '2': 'Rejected',
+    'Pending': 'Pending',
+    'Resolved': 'Resolved',
+    'Rejected': 'Rejected',
   };
+  return map[String(backendStatus)] ?? String(backendStatus);
+};
 
-  useEffect(() => { fetchComplaints(); }, []);
+const mapBackendResolutionAction = (val: unknown): string | null => {
+  if (val === null || val === undefined) return null;
+  const map: Record<string, string> = {
+    '0': 'NoViolation',
+    '1': 'Warning',
+    '2': 'SuspendBooth',
+    '3': 'CloseBooth',
+    'NoViolation': 'NoViolation',
+    'Warning': 'Warning',
+    'SuspendBooth': 'SuspendBooth',
+    'CloseBooth': 'CloseBooth',
+  };
+  return map[String(val)] ?? String(val);
+};
+
+interface ComplaintsProps {
+  initialComplaintId?: string;
+}
+
+export function Complaints({ initialComplaintId }: ComplaintsProps = {}) {
+  const [complaintsList, setComplaintsList] = useState<Complaint[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [userLookup, setUserLookup] = useState<Record<string, UserProfile>>({});
+  const [boothLookup, setBoothLookup] = useState<Record<string, BoothInfo>>({});
+  const [marketNames, setMarketNames] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [statusCounts, setStatusCounts] = useState<{ Pending: number; Resolved: number; Rejected: number; All: number } | null>(null);
 
   const [activeTab, setActiveTab] = useState<StatusTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,111 +91,193 @@ export function Complaints() {
   const itemsPerPage = 8;
   const [selectedComplaintId, setSelectedComplaintId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [adminResponse, setAdminResponse] = useState('');
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
-  const [complaintStatuses, setComplaintStatuses] = useState<Record<string, string>>({});
-  const [localConversations, setLocalConversations] = useState<Record<string, LocalMessage[]>>({});
   const [actionMode, setActionMode] = useState<ActionMode>(null);
-  const [warnReason, setWarnReason] = useState('');
+  const [hasOpenedInitial, setHasOpenedInitial] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const getEffectiveStatus = (id: string, originalStatus: string) =>
-    complaintStatuses[id] ?? originalStatus;
+  const [resolveResponse, setResolveResponse] = useState('');
+  const [resolveAction, setResolveAction] = useState<ComplaintResolutionAction>(ComplaintResolutionAction.NoViolation);
+  const [resolvePolicyViolation, setResolvePolicyViolation] = useState('');
+  const [suspendConfirm, setSuspendConfirm] = useState(false);
 
-  const countByStatus = (status: string) =>
-    complaintsList.filter(c =>
-      status === 'all' ? true : getEffectiveStatus(c.id, c.status) === status
-    ).length;
+  const [rejectReason, setRejectReason] = useState('');
 
-  const filtered = complaintsList.filter(c => {
-    const effectiveStatus = getEffectiveStatus(c.id, c.status);
-    if (activeTab !== 'all' && effectiveStatus !== activeTab) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      return (
-        c.id.toLowerCase().includes(q) ||
-        c.description.toLowerCase().includes(q)
-      );
+  const fetchComplaints = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    const statusFilter = activeTab === 'all'
+      ? undefined
+      : activeTab === 'Resolved'
+        ? ComplaintStatus.Resolved
+        : ComplaintStatus.Rejected;
+
+    const [complaintResult, countsResult, userResult, boothResult, marketResult] = await Promise.allSettled([
+      adminComplaintService.getAllComplaints(currentPage, itemsPerPage, { status: statusFilter, keyword: searchQuery || undefined }),
+      adminComplaintService.getComplaintCounts(),
+      adminAccountService.getUsers({ page: 1, pageSize: 100 }),
+      adminBoothService.getAllBooths(1, 100),
+      adminNightMarketService.getNightMarkets(1, 100),
+    ]);
+
+    if (countsResult.status === 'fulfilled' && countsResult.value.success) {
+      const c = countsResult.value.data;
+      setStatusCounts({ Pending: c.pending, Resolved: c.resolved, Rejected: c.rejected, All: c.total });
     }
-    return true;
-  });
 
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
-  const paginatedComplaints = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    if (complaintResult.status === 'fulfilled' && complaintResult.value.success) {
+      setComplaintsList(complaintResult.value.data.items);
+      setTotalCount(complaintResult.value.data.total);
+    } else {
+      setComplaintsList([]);
+      setTotalCount(0);
+      setError('Failed to load complaints. Please try again.');
+    }
 
-  const addLocalMessage = (complaintId: string, msg: LocalMessage) => {
-    setLocalConversations(prev => ({
-      ...prev,
-      [complaintId]: [...(prev[complaintId] ?? []), msg],
-    }));
+    if (userResult.status === 'fulfilled' && userResult.value.success) {
+      const firstPage = userResult.value;
+      const totalPages = firstPage.data.totalPages || 1;
+      const remainingPages = totalPages > 1
+        ? await Promise.allSettled(Array.from({ length: totalPages - 1 }, (_, index) => adminAccountService.getUsers({ page: index + 2, pageSize: 100 })))
+        : [];
+      const users = [
+        ...firstPage.data.items,
+        ...remainingPages
+          .filter((r): r is PromiseFulfilledResult<typeof firstPage> => r.status === 'fulfilled' && r.value.success)
+          .flatMap(r => r.value.data.items),
+      ];
+      setUserLookup(Object.fromEntries(users.map(user => [user.id, user])));
+    }
+
+    if (boothResult.status === 'fulfilled' && boothResult.value.success) {
+      setBoothLookup(Object.fromEntries(boothResult.value.data.items.map(booth => [booth.id, booth as unknown as BoothInfo])));
+    }
+
+    if (marketResult.status === 'fulfilled' && marketResult.value.success) {
+      setMarketNames(Object.fromEntries(marketResult.value.data.items.map(market => [market.id, market.name])));
+    }
+
+    setLoading(false);
+  }, [activeTab, currentPage, searchQuery, itemsPerPage]);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void fetchComplaints(); }, [fetchComplaints, reloadKey]);
+
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => setSuccessMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
+
+  const getUserName = (id: string) => userLookup[id]?.fullName || userLookup[id]?.email || 'Customer information unavailable';
+  const getUserAvatar = (id: string) => userLookup[id]?.avatarUrl || '';
+  const getBoothName = (id: string) => boothLookup[id]?.boothName || 'No data available';
+  const getMarketNameByBooth = (boothId: string) => {
+    const booth = boothLookup[boothId];
+    return booth?.nightMarketName || marketNames[booth?.nightMarketId ?? ''] || 'No data available';
   };
 
-  const handleSendMessage = () => {
-    if (!adminResponse.trim() || !selectedComplaintId) return;
-    addLocalMessage(selectedComplaintId, {
-      senderName: 'Platform Admin',
-      senderType: 'admin',
-      message: adminResponse.trim(),
-      time: new Date().toLocaleString(),
-    });
-    setAdminResponse('');
+  const countByStatus = (status: string) => {
+    if (!statusCounts) return undefined;
+    if (status === 'all') return statusCounts.All;
+    return statusCounts[status as 'Resolved' | 'Rejected'] ?? 0;
   };
 
-  const handleResolveConfirm = async () => {
-    if (!selectedComplaintId) return;
+  const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+
+  const selectedComplaint = complaintsList.find(c => c.id === selectedComplaintId);
+  const complaintBooth = selectedComplaint ? { name: getBoothName(selectedComplaint.boothId), location: boothLookup[selectedComplaint.boothId]?.slotNumber || 'No data available' } : null;
+  const complaintMarket = selectedComplaint ? { name: getMarketNameByBooth(selectedComplaint.boothId) } : null;
+  const complaintUser = selectedComplaint ? { name: getUserName(selectedComplaint.customerId), avatar: getUserAvatar(selectedComplaint.customerId) } : null;
+  const boothOwner = selectedComplaint && boothLookup[selectedComplaint.boothId]?.boothOwnerName
+    ? { id: boothLookup[selectedComplaint.boothId].boothOwnerId, name: boothLookup[selectedComplaint.boothId].boothOwnerName, avatar: getUserAvatar(boothLookup[selectedComplaint.boothId].boothOwnerId) }
+    : null;
+
+  const resetFormState = useCallback(() => {
+    setActionMode(null);
+    setActionError(null);
+    setResolveResponse('');
+    setResolveAction(ComplaintResolutionAction.NoViolation);
+    setResolvePolicyViolation('');
+    setSuspendConfirm(false);
+    setRejectReason('');
+  }, []);
+
+  useEffect(() => {
+    if (!initialComplaintId || hasOpenedInitial) return;
+    if (complaintsList.some(complaint => complaint.id === initialComplaintId)) {
+      void Promise.resolve().then(() => {
+        setHasOpenedInitial(true);
+        setSelectedComplaintId(initialComplaintId);
+        resetFormState();
+      });
+    }
+  }, [complaintsList, initialComplaintId, resetFormState, hasOpenedInitial]);
+
+  const handleResolveSubmit = async () => {
+    if (!selectedComplaintId || !resolveResponse.trim() || resolveResponse.trim().length < 10) return;
+    if (resolveAction !== ComplaintResolutionAction.NoViolation && !resolvePolicyViolation.trim()) return;
+    if (resolveAction === ComplaintResolutionAction.SuspendBooth && !suspendConfirm) return;
+
+    setSubmitting(true);
+    setActionError(null);
     try {
       await adminComplaintService.updateComplaintStatus(selectedComplaintId, {
         status: ComplaintStatus.Resolved,
-        adminResponse: adminResponse,
-        resolutionAction: ComplaintResolutionAction.NoViolation
+        adminResponse: resolveResponse.trim(),
+        resolutionAction: resolveAction,
+        policyViolation: resolveAction !== ComplaintResolutionAction.NoViolation ? resolvePolicyViolation.trim() : null,
       });
-      fetchComplaints();
-      setActionMode(null);
+      setSuccessMessage('Complaint resolved successfully.');
       setSelectedComplaintId(null);
-      setAdminResponse('');
-    } catch (e) { console.error(e); }
+      resetFormState();
+      setReloadKey(k => k + 1);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } }; message?: string };
+      setActionError(getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleWarnConfirm = async () => {
-    if (!selectedComplaintId || !warnReason.trim()) return;
+  const handleRejectSubmit = async () => {
+    if (!selectedComplaintId || !rejectReason.trim() || rejectReason.trim().length < 10) return;
+
+    setSubmitting(true);
+    setActionError(null);
     try {
       await adminComplaintService.updateComplaintStatus(selectedComplaintId, {
-        status: ComplaintStatus.UnderInvestigation,
-        adminResponse: warnReason.trim(),
-        resolutionAction: ComplaintResolutionAction.Warning
+        status: ComplaintStatus.Rejected,
+        adminResponse: rejectReason.trim(),
+        resolutionAction: null,
+        policyViolation: null,
       });
-      fetchComplaints();
-      setWarnReason('');
-      setActionMode(null);
+      setSuccessMessage('Complaint rejected successfully.');
       setSelectedComplaintId(null);
-      setAdminResponse('');
-    } catch (e) { console.error(e); }
+      resetFormState();
+      setReloadKey(k => k + 1);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } }; message?: string };
+      setActionError(getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleSuspendConfirm = async () => {
-    if (!selectedComplaintId) return;
-    try {
-      await adminComplaintService.updateComplaintStatus(selectedComplaintId, {
-        status: ComplaintStatus.Closed,
-        adminResponse: 'Booth has been suspended pending investigation.',
-        resolutionAction: ComplaintResolutionAction.SuspendBooth
-      });
-      fetchComplaints();
-      setActionMode(null);
-      setSelectedComplaintId(null);
-      setAdminResponse('');
-    } catch (e) { console.error(e); }
-  };
-
-  const selectedComplaint = complaintsList.find(c => c.id === selectedComplaintId);
-  const selectedUser = null;
-  const complaintBooth = null;
-  const complaintMarket = null;
-  const complaintUser = null;
-  const boothOwner = null;
+  const selectedStatus = selectedComplaint ? mapBackendStatus(selectedComplaint.status) : '';
+  const selectedResolutionAction = selectedComplaint ? mapBackendResolutionAction(selectedComplaint.resolutionAction) : null;
+  const isPending = selectedStatus === 'Pending';
+  const needsPolicyViolation = resolveAction === ComplaintResolutionAction.Warning || resolveAction === ComplaintResolutionAction.SuspendBooth;
+  const canSubmitResolve = resolveResponse.trim().length >= 10 && (!needsPolicyViolation || resolvePolicyViolation.trim().length > 0) && (resolveAction !== ComplaintResolutionAction.SuspendBooth || suspendConfirm);
+  const canSubmitReject = rejectReason.trim().length >= 10;
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold" style={{ color: '#111827' }}>Complaint Management</h2>
@@ -172,165 +285,115 @@ export function Complaints() {
         </div>
       </div>
 
-      {/* Tab bar + filter */}
-      <div
-        style={{
-          background: '#FFFFFF',
-          border: '1px solid #E5E7EB',
-          boxShadow: '0 4px 32px rgba(15,23,42,0.06)',
-          borderRadius: '1rem',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          className="flex overflow-x-auto"
-          style={{ borderBottom: '1px solid #E5E7EB' }}
-        >
+      {successMessage && (
+        <div style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '0.75rem', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <CheckCircle className="w-4 h-4" style={{ color: '#34D399' }} />
+          <span style={{ color: '#059669', fontSize: '0.875rem', fontWeight: 500 }}>{successMessage}</span>
+        </div>
+      )}
+
+      {error && (
+        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '0.75rem', padding: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ color: '#DC2626', fontSize: '0.875rem' }}>{error}</span>
+          <button
+            onClick={() => { setError(null); setReloadKey(k => k + 1); }}
+            style={{ padding: '0.5rem 1rem', border: '1px solid #DC2626', borderRadius: '0.5rem', background: '#FFFFFF', color: '#DC2626', cursor: 'pointer', fontSize: '0.8125rem', fontWeight: 600 }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      <div style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', boxShadow: '0 4px 32px rgba(15,23,42,0.06)', borderRadius: '1rem', overflow: 'hidden' }}>
+        <div className="flex overflow-x-auto" style={{ borderBottom: '1px solid #E5E7EB' }}>
           {statusTabs.map(tab => {
-            const count = countByStatus(tab.key);
             const isActive = activeTab === tab.key;
             return (
               <button
                 key={tab.key}
                 onClick={() => { setActiveTab(tab.key); setCurrentPage(1); }}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  padding: '0.875rem 1.25rem',
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                  whiteSpace: 'nowrap',
-                  border: 'none',
+                  display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.875rem 1.25rem',
+                  fontSize: '0.875rem', fontWeight: 500, whiteSpace: 'nowrap', border: 'none',
                   borderBottom: isActive ? '2px solid #6366F1' : '2px solid transparent',
-                  marginBottom: '-1px',
-                  background: 'transparent',
-                  color: isActive ? '#818CF8' : '#64748B',
-                  cursor: 'pointer',
-                  transition: 'color 0.15s',
+                  marginBottom: '-1px', background: 'transparent',
+                  color: isActive ? '#818CF8' : '#64748B', cursor: 'pointer', transition: 'color 0.15s',
                 }}
               >
                 {tab.label}
-                <span
-                  style={
-                    isActive
-                      ? { background: 'rgba(99,102,241,0.2)', color: '#818CF8', borderRadius: '9999px', padding: '1px 8px', fontSize: '0.75rem', fontWeight: 600 }
-                      : { background: '#FFFFFF', color: '#64748B', borderRadius: '9999px', padding: '1px 8px', fontSize: '0.75rem', fontWeight: 600 }
-                  }
-                >
-                  {count}
-                </span>
+                {countByStatus(tab.key) !== undefined && (
+                  <span style={isActive
+                    ? { background: 'rgba(99,102,241,0.2)', color: '#818CF8', borderRadius: '9999px', padding: '1px 8px', fontSize: '0.75rem', fontWeight: 600 }
+                    : { background: '#FFFFFF', color: '#64748B', borderRadius: '9999px', padding: '1px 8px', fontSize: '0.75rem', fontWeight: 600 }}
+                  >
+                    {countByStatus(tab.key)}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
 
-        {/* Filter bar */}
-        <div
-          style={{ padding: '1rem', borderBottom: '1px solid #E5E7EB' }}
-        >
+        <div style={{ padding: '1rem', borderBottom: '1px solid #E5E7EB' }}>
           <div className="relative">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
-              style={{ color: '#64748B' }}
-            />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#64748B' }} />
             <input
               type="text"
-              placeholder="Search by ID, description, customer or booth..."
+              placeholder="Search by title or description..."
               value={searchQuery}
               onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-              style={{
-                width: '100%',
-                paddingLeft: '2.25rem',
-                paddingRight: '1rem',
-                paddingTop: '0.5rem',
-                paddingBottom: '0.5rem',
-                background: '#F1F5F9',
-                border: '1px solid #E5E7EB',
-                borderRadius: '0.5rem',
-                fontSize: '0.875rem',
-                color: 'rgba(255,255,255,0.8)',
-                outline: 'none',
-              }}
+              style={{ width: '100%', paddingLeft: '2.25rem', paddingRight: '1rem', paddingTop: '0.5rem', paddingBottom: '0.5rem', background: '#F1F5F9', border: '1px solid #E5E7EB', borderRadius: '0.5rem', fontSize: '0.875rem', color: '#374151', outline: 'none' }}
             />
           </div>
         </div>
 
-        {/* Complaint list */}
         <div className="space-y-3" style={{ padding: '1rem' }}>
-          {paginatedComplaints.map(c => {
-            
-            
-            
+          {loading && (
+            <div className="p-12 text-center">
+              <div className="animate-pulse" style={{ color: '#64748B', fontSize: '0.875rem' }}>Loading complaints...</div>
+            </div>
+          )}
+
+          {!loading && complaintsList.map(c => {
             const isSelected = selectedComplaintId === c.id;
             const isHovered = hoveredCard === c.id;
-            const effectiveStatus = getEffectiveStatus(c.id, c.status);
-            const isDimmed = effectiveStatus === 'Resolved' || effectiveStatus === 'Closed';
+            const effectiveStatus = mapBackendStatus(c.status);
+            const isDimmed = effectiveStatus === 'Resolved' || effectiveStatus === 'Rejected';
 
             return (
               <div
                 key={c.id}
-                onClick={() => { setSelectedComplaintId(c.id); setActionMode(null); setWarnReason(''); }}
+                onClick={() => { setSelectedComplaintId(c.id); resetFormState(); }}
                 onMouseEnter={() => setHoveredCard(c.id)}
                 onMouseLeave={() => setHoveredCard(null)}
                 style={{
-                  background: isSelected
-                    ? 'rgba(99,102,241,0.05)'
-                    : isHovered
-                    ? '#F1F5F9'
-                    : '#FFFFFF',
-                  border: isSelected
-                    ? '1px solid rgba(99,102,241,0.4)'
-                    : isHovered
-                    ? '1px solid #E5E7EB'
-                    : '1px solid #F1F5F9',
-                  borderRadius: '0.75rem',
-                  padding: '1.25rem',
-                  cursor: 'pointer',
-                  transition: 'background 0.15s, border-color 0.15s, opacity 0.15s',
-                  opacity: isDimmed ? 0.55 : 1,
+                  background: isSelected ? 'rgba(99,102,241,0.05)' : isHovered ? '#F1F5F9' : '#FFFFFF',
+                  border: isSelected ? '1px solid rgba(99,102,241,0.4)' : isHovered ? '1px solid #E5E7EB' : '1px solid #F1F5F9',
+                  borderRadius: '0.75rem', padding: '1.25rem', cursor: 'pointer',
+                  transition: 'background 0.15s, border-color 0.15s, opacity 0.15s', opacity: isDimmed ? 0.55 : 1,
                 }}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                      <span
-                        style={{
-                          fontFamily: 'monospace',
-                          color: '#818CF8',
-                          fontSize: '0.875rem',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {c.id}
-                      </span>
-                      <span style={statusPillStyle[effectiveStatus] ?? statusPillStyle['Closed']}>{effectiveStatus}</span>
+                      <span style={{ color: '#111827', fontSize: '0.875rem', fontWeight: 700 }}>{c.title || 'Complaint'}</span>
+                      <span style={statusPillStyle[effectiveStatus] ?? statusPillStyle['Pending']}>{effectiveStatus}</span>
                     </div>
                     <p className="text-sm mb-2 line-clamp-2" style={{ color: '#4B5563' }}>{c.description}</p>
                     <div className="flex items-center gap-4 text-xs" style={{ color: '#64748B' }}>
                       <button
-                        onClick={e => { e.stopPropagation(); setSelectedUserId(null); }}
+                        onClick={e => { e.stopPropagation(); setSelectedUserId(c.customerId); }}
                         className="flex items-center gap-1 transition-colors"
                         style={{ color: '#64748B', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-                        onMouseEnter={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.color = '#818CF8')}
-                        onMouseLeave={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.color = '#64748B')}
                       >
                         <UserIcon className="w-3 h-3" />
-                        <span style={{ textDecoration: 'underline' }}>{'Customer ' + c.customerId.substring(0,8)}</span>
+                        <span style={{ textDecoration: 'underline' }}>{getUserName(c.customerId)}</span>
                       </button>
-                      <span className="flex items-center gap-1">
-                        <Store className="w-3 h-3" />
-                        {'Booth ' + c.boothId.substring(0,8)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />
-                        {'Order ' + c.orderId.substring(0,8)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {c.createdAt}
-                      </span>
-                      {/* removed images section */}
+                      <span className="flex items-center gap-1"><Store className="w-3 h-3" />{getBoothName(c.boothId)}</span>
+                      <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{new Date(c.createdAt).toLocaleDateString('en-US')}</span>
+                      {c.imageUrls && c.imageUrls.length > 0 && (
+                        <span className="flex items-center gap-1"><ImageIcon className="w-3 h-3" />{c.imageUrls.length} image{c.imageUrls.length > 1 ? 's' : ''}</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -338,597 +401,276 @@ export function Complaints() {
             );
           })}
 
-          {filtered.length === 0 && (
+          {!loading && complaintsList.length === 0 && (
             <div className="p-12 text-center">
               <AlertCircle className="w-12 h-12 mx-auto mb-3" style={{ color: 'rgba(17,24,39,0.15)' }} />
               <p style={{ color: '#64748B' }}>No complaints found</p>
             </div>
           )}
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-            totalItems={filtered.length}
-            itemsPerPage={itemsPerPage}
-          />
+
+          {!loading && complaintsList.length > 0 && (
+            <Pagination currentPage={safePage} totalPages={totalPages} onPageChange={setCurrentPage} totalItems={totalCount} itemsPerPage={itemsPerPage} />
+          )}
         </div>
       </div>
 
-      {/* Complaint Detail Modal */}
       <Modal
         isOpen={!!selectedComplaint}
-        onClose={() => { setSelectedComplaintId(null); setAdminResponse(''); setActionMode(null); setWarnReason(''); }}
+        onClose={() => { setSelectedComplaintId(null); resetFormState(); }}
         title="Complaint Details"
         size="lg"
       >
         {selectedComplaint && complaintUser && complaintBooth && complaintMarket && (
           <div className="space-y-6">
             <div>
-              <span
-                style={{
-                  fontFamily: 'monospace',
-                  color: '#818CF8',
-                  fontSize: '1.125rem',
-                  fontWeight: 700,
-                }}
-              >
-                {selectedComplaint.id}
-              </span>
+              <h3 style={{ color: '#111827', fontSize: '1.125rem', fontWeight: 700, margin: 0 }}>{selectedComplaint.title || 'Complaint'}</h3>
               <div className="flex items-center gap-2 mt-3 flex-wrap">
-                {(() => {
-                  const eff = getEffectiveStatus(selectedComplaint.id, selectedComplaint.status);
-                  return <span style={statusPillStyle[eff] ?? statusPillStyle['Closed']}>{eff}</span>;
-                })()}
+                <span style={statusPillStyle[selectedStatus] ?? statusPillStyle['Pending']}>{selectedStatus}</span>
+                {selectedStatus === 'Resolved' && selectedResolutionAction && resolutionActionLabels[selectedResolutionAction] && (
+                  <span style={{ background: 'rgba(99,102,241,0.1)', color: '#818CF8', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '9999px', padding: '2px 10px', fontSize: '0.75rem', fontWeight: 500 }}>
+                    {resolutionActionLabels[selectedResolutionAction]}
+                  </span>
+                )}
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <button
                 onClick={() => setSelectedUserId(selectedComplaint.customerId)}
-                style={{
-                  background: '#FFFFFF',
-                  border: '1px solid #E5E7EB',
-                  borderRadius: '0.75rem',
-                  padding: '1rem',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  transition: 'background 0.15s',
-                }}
-                onMouseEnter={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = '#FFFFFF')}
-                onMouseLeave={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = '#FFFFFF')}
+                style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '0.75rem', padding: '1rem', textAlign: 'left', cursor: 'pointer' }}
               >
                 <div className="flex items-center gap-2 mb-2" style={{ color: '#64748B', fontSize: '0.875rem' }}>
-                  <UserIcon className="w-4 h-4" />
-                  <span>Reported By</span>
+                  <UserIcon className="w-4 h-4" /><span>Reported By</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <img src={(complaintUser as any).avatar} alt={(complaintUser as any).name} className="w-10 h-10 rounded-full" />
+                  {complaintUser.avatar
+                    ? <ImageWithFallback src={complaintUser.avatar} alt={complaintUser.name} className="w-10 h-10 rounded-full" />
+                    : <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: '#E5E7EB', color: '#64748B', fontSize: '0.875rem', fontWeight: 600 }}>{complaintUser.name?.charAt(0)?.toUpperCase() || '?'}</div>}
                   <div>
-                    <p className="font-medium" style={{ color: '#374151' }}>{(complaintUser as any).name}</p>
+                    <p className="font-medium" style={{ color: '#374151' }}>{complaintUser.name}</p>
                     <p className="text-sm" style={{ color: '#818CF8' }}>View profile →</p>
                   </div>
                 </div>
               </button>
 
-              <div
-                style={{
-                  background: '#FFFFFF',
-                  border: '1px solid #E5E7EB',
-                  borderRadius: '0.75rem',
-                  padding: '1rem',
-                }}
-              >
+              <div style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '0.75rem', padding: '1rem' }}>
                 <div className="flex items-center gap-2 mb-2" style={{ color: '#64748B', fontSize: '0.875rem' }}>
-                  <Store className="w-4 h-4" />
-                  <span>Booth Involved</span>
+                  <Store className="w-4 h-4" /><span>Booth Involved</span>
                 </div>
-                <p className="font-medium" style={{ color: '#374151' }}>{(complaintBooth as any).name}</p>
-                <p className="text-sm mt-1" style={{ color: '#64748B' }}>{(complaintMarket as any).name}</p>
-                <p className="text-sm" style={{ color: '#64748B' }}>{(complaintBooth as any).location}</p>
+                <p className="font-medium" style={{ color: '#374151' }}>{complaintBooth.name}</p>
+                <p className="text-sm mt-1" style={{ color: '#64748B' }}>{complaintMarket.name}</p>
+                <p className="text-sm" style={{ color: '#64748B' }}>{complaintBooth.location}</p>
               </div>
             </div>
 
             {boothOwner && (
               <button
-                onClick={() => setSelectedUserId((boothOwner as any).id)}
-                style={{
-                  width: '100%',
-                  background: 'rgba(245,158,11,0.07)',
-                  border: '1px solid rgba(245,158,11,0.2)',
-                  borderRadius: '0.75rem',
-                  padding: '1rem',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  transition: 'background 0.15s',
-                }}
-                onMouseEnter={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = 'rgba(245,158,11,0.12)')}
-                onMouseLeave={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = 'rgba(245,158,11,0.07)')}
+                onClick={() => setSelectedUserId(boothOwner.id)}
+                style={{ width: '100%', background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '0.75rem', padding: '1rem', textAlign: 'left', cursor: 'pointer' }}
               >
                 <div className="flex items-center gap-2 mb-2" style={{ color: '#F59E0B', fontSize: '0.875rem' }}>
-                  <Package className="w-4 h-4" />
-                  <span>Booth Owner</span>
+                  <Store className="w-4 h-4" /><span>Booth Owner</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <img src={(boothOwner as any).avatar} alt={(boothOwner as any).name} className="w-10 h-10 rounded-full" />
+                  {boothOwner.avatar
+                    ? <ImageWithFallback src={boothOwner.avatar} alt={boothOwner.name} className="w-10 h-10 rounded-full" />
+                    : <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.15)', color: '#F59E0B', fontSize: '0.875rem', fontWeight: 600 }}>{boothOwner.name?.charAt(0)?.toUpperCase() || '?'}</div>}
                   <div>
-                    <p className="font-medium" style={{ color: '#374151' }}>{(boothOwner as any).name}</p>
+                    <p className="font-medium" style={{ color: '#374151' }}>{boothOwner.name}</p>
                     <p className="text-sm" style={{ color: '#818CF8' }}>View profile →</p>
                   </div>
                 </div>
               </button>
             )}
 
-            <div
-              style={{
-                background: '#FFFFFF',
-                border: '1px solid #E5E7EB',
-                borderRadius: '0.75rem',
-                padding: '1rem',
-              }}
-            >
+            <div style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '0.75rem', padding: '1rem' }}>
               <div className="flex items-center gap-2 mb-2" style={{ color: '#64748B', fontSize: '0.875rem' }}>
-                <Calendar className="w-4 h-4" />
-                <span>Submitted</span>
+                <Calendar className="w-4 h-4" /><span>Submitted</span>
               </div>
               <p className="font-medium" style={{ color: '#374151' }}>{new Date(selectedComplaint.createdAt).toLocaleDateString()}</p>
             </div>
 
             <div>
               <p className="text-sm font-semibold mb-3" style={{ color: '#475569' }}>Description</p>
-              <p
-                className="leading-relaxed text-sm"
-                style={{
-                  background: '#FFFFFF',
-                  border: '1px solid #E5E7EB',
-                  borderRadius: '0.75rem',
-                  padding: '1rem',
-                  color: '#4B5563',
-                }}
-              >
+              <p className="leading-relaxed text-sm" style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '0.75rem', padding: '1rem', color: '#4B5563' }}>
                 {selectedComplaint.description}
               </p>
             </div>
 
-            {/* Removed images section */}
-
-            <div>
-              <p className="text-sm font-semibold mb-3" style={{ color: '#475569' }}>Conversation History</p>
-              <div className="space-y-3">
-                {[...((selectedComplaint as any).conversations || []), ...(localConversations[selectedComplaint.id] ?? [])].map((conv, idx) => (
-                  <div
-                    key={`conv-${idx}`}
-                    style={
-                      conv.senderType === 'admin'
-                        ? { background: '#F3F4F6', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '0.75rem', padding: '1rem' }
-                        : conv.senderType === 'booth_owner'
-                        ? { background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '0.75rem', padding: '1rem' }
-                        : { background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '0.75rem', padding: '1rem' }
-                    }
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium" style={{ color: '#374151' }}>{conv.senderName}</span>
-                        <span
-                          style={
-                            conv.senderType === 'admin'
-                              ? { background: 'rgba(99,102,241,0.2)', color: '#818CF8', borderRadius: '9999px', padding: '1px 8px', fontSize: '0.7rem' }
-                              : conv.senderType === 'booth_owner'
-                              ? { background: 'rgba(245,158,11,0.2)', color: '#F59E0B', borderRadius: '9999px', padding: '1px 8px', fontSize: '0.7rem' }
-                              : { background: '#FFFFFF', color: '#64748B', borderRadius: '9999px', padding: '1px 8px', fontSize: '0.7rem' }
-                          }
-                        >
-                          {conv.senderType === 'admin' ? 'Admin' : conv.senderType === 'booth_owner' ? 'Booth Owner' : 'Customer'}
-                        </span>
-                      </div>
-                      <span className="text-xs" style={{ color: '#64748B' }}>{conv.time}</span>
+            {selectedComplaint.imageUrls && selectedComplaint.imageUrls.length > 0 && (
+              <div>
+                <p className="text-sm font-semibold mb-3" style={{ color: '#475569' }}>Evidence Images</p>
+                <div className="grid grid-cols-3 gap-3">
+                  {selectedComplaint.imageUrls.map((url, idx) => (
+                    <div key={`img-${idx}`} style={{ borderRadius: '0.5rem', overflow: 'hidden', border: '1px solid #E5E7EB' }}>
+                      <ImageWithFallback src={url} alt={`Evidence ${idx + 1}`} className="w-full h-32 object-cover" />
                     </div>
-                    <p className="text-sm" style={{ color: '#4B5563' }}>{conv.message}</p>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!isPending && selectedComplaint.adminResponse && (
+              <div>
+                <p className="text-sm font-semibold mb-3" style={{ color: '#475569' }}>Admin Response</p>
+                <div style={{ background: '#F8FAFC', border: '1px solid #E5E7EB', borderRadius: '0.75rem', padding: '1rem' }}>
+                  <p className="text-sm" style={{ color: '#4B5563', whiteSpace: 'pre-wrap' }}>{selectedComplaint.adminResponse}</p>
+                  {selectedStatus === 'Resolved' && selectedResolutionAction && resolutionActionLabels[selectedResolutionAction] && (
+                    <div className="mt-3 pt-3" style={{ borderTop: '1px solid #E5E7EB' }}>
+                      <p className="text-xs" style={{ color: '#64748B' }}>Action taken:</p>
+                      <p className="text-sm font-medium" style={{ color: '#374151' }}>{resolutionActionLabels[selectedResolutionAction]}</p>
+                    </div>
+                  )}
+                  {selectedComplaint.policyViolation && (
+                    <div className="mt-2">
+                      <p className="text-xs" style={{ color: '#64748B' }}>Policy violation:</p>
+                      <p className="text-sm" style={{ color: '#4B5563' }}>{selectedComplaint.policyViolation}</p>
+                    </div>
+                  )}
+                  <div className="mt-2">
+                    <p className="text-xs" style={{ color: '#64748B' }}>Processed at: {new Date(selectedComplaint.updatedAt).toLocaleString()}</p>
                   </div>
-                ))}
+                </div>
               </div>
+            )}
 
-              <div className="mt-3 flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Type an admin response..."
-                  value={adminResponse}
-                  onChange={e => setAdminResponse(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleSendMessage(); }}
-                  style={{
-                    flex: 1,
-                    padding: '0.5rem 1rem',
-                    background: '#F1F5F9',
-                    border: '1px solid #E5E7EB',
-                    borderRadius: '0.5rem',
-                    fontSize: '0.875rem',
-                    color: 'rgba(255,255,255,0.8)',
-                    outline: 'none',
-                  }}
-                />
-                <button
-                  onClick={handleSendMessage}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    background: adminResponse.trim() ? 'rgba(99,102,241,0.8)' : 'rgba(99,102,241,0.35)',
-                    color: '#fff',
-                    borderRadius: '0.5rem',
-                    fontSize: '0.875rem',
-                    fontWeight: 500,
-                    border: 'none',
-                    cursor: adminResponse.trim() ? 'pointer' : 'default',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    transition: 'background 0.15s',
-                  }}
-                  onMouseEnter={(e: React.MouseEvent<HTMLElement>) => { if (adminResponse.trim()) e.currentTarget.style.background = 'rgba(99,102,241,1)'; }}
-                  onMouseLeave={(e: React.MouseEvent<HTMLElement>) => { if (adminResponse.trim()) e.currentTarget.style.background = 'rgba(99,102,241,0.8)'; }}
-                >
-                  <Send className="w-4 h-4" />
-                  Send
-                </button>
-              </div>
-            </div>
+            <div className="pt-4 space-y-3" style={{ borderTop: '1px solid #E5E7EB' }}>
+              {actionError && (
+                <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '0.5rem', padding: '0.75rem', fontSize: '0.8125rem', color: '#DC2626' }}>
+                  {actionError}
+                </div>
+              )}
 
-            <div
-              className="pt-4 space-y-3"
-              style={{ borderTop: '1px solid #E5E7EB' }}
-            >
-              {/* Inline confirmation: Resolve */}
               {actionMode === 'resolve' && (
-                <div
-                  style={{
-                    background: 'rgba(16,185,129,0.08)',
-                    border: '1px solid rgba(16,185,129,0.25)',
-                    borderRadius: '0.75rem',
-                    padding: '1rem',
-                  }}
-                >
-                  <p className="text-sm font-medium mb-3" style={{ color: '#34D399' }}>
-                    Mark this complaint as Resolved?
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleResolveConfirm}
-                      style={{
-                        padding: '0.5rem 1.25rem',
-                        background: 'rgba(16,185,129,0.8)',
-                        color: '#fff',
-                        borderRadius: '0.5rem',
-                        fontWeight: 500,
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontSize: '0.875rem',
-                        transition: 'background 0.15s',
-                      }}
-                      onMouseEnter={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = 'rgba(16,185,129,1)')}
-                      onMouseLeave={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = 'rgba(16,185,129,0.8)')}
-                    >
-                      Confirm Resolve
-                    </button>
-                    <button
-                      onClick={() => setActionMode(null)}
-                      style={{
-                        padding: '0.5rem 1rem',
-                        background: '#FFFFFF',
-                        color: '#475569',
-                        borderRadius: '0.5rem',
-                        fontWeight: 500,
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontSize: '0.875rem',
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Inline form: Warn Booth */}
-              {actionMode === 'warn' && (
-                <div
-                  style={{
-                    background: 'rgba(217,119,6,0.08)',
-                    border: '1px solid rgba(217,119,6,0.25)',
-                    borderRadius: '0.75rem',
-                    padding: '1rem',
-                  }}
-                >
-                  <p className="text-sm font-medium mb-3" style={{ color: '#F59E0B' }}>
-                    Provide a reason for warniK the booth owner:
-                  </p>
+                <div style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: '0.75rem', padding: '1rem' }}>
+                  <p className="text-sm font-medium mb-3" style={{ color: '#34D399' }}>Resolve this complaint</p>
                   <textarea
-                    value={warnReason}
-                    onChange={e => setWarnReason(e.target.value)}
-                    placeholder="Describe the reason for the warniK..."
-                    rows={3}
-                    style={{
-                      width: '100%',
-                      padding: '0.5rem 0.75rem',
-                      background: '#F1F5F9',
-                      border: '1px solid rgba(217,119,6,0.3)',
-                      borderRadius: '0.5rem',
-                      fontSize: '0.875rem',
-                      color: 'rgba(255,255,255,0.8)',
-                      outline: 'none',
-                      resize: 'vertical',
-                      boxSizing: 'border-box',
-                    }}
+                    value={resolveResponse} onChange={e => setResolveResponse(e.target.value)}
+                    placeholder="Enter admin response for the customer (min 10 characters)..."
+                    rows={3} disabled={submitting}
+                    style={{ width: '100%', padding: '0.5rem 0.75rem', background: '#F1F5F9', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '0.5rem', fontSize: '0.875rem', color: '#374151', outline: 'none', resize: 'vertical', boxSizing: 'border-box', marginBottom: '0.75rem', opacity: submitting ? 0.6 : 1 }}
                   />
-                  <div className="flex gap-2 mt-3">
-                    <button
-                      onClick={handleWarnConfirm}
-                      style={{
-                        padding: '0.5rem 1.25rem',
-                        background: warnReason.trim() ? 'rgba(217,119,6,0.85)' : 'rgba(217,119,6,0.35)',
-                        color: '#fff',
-                        borderRadius: '0.5rem',
-                        fontWeight: 500,
-                        border: 'none',
-                        cursor: warnReason.trim() ? 'pointer' : 'default',
-                        fontSize: '0.875rem',
-                        transition: 'background 0.15s',
-                      }}
-                      onMouseEnter={(e: React.MouseEvent<HTMLElement>) => { if (warnReason.trim()) e.currentTarget.style.background = 'rgba(217,119,6,1)'; }}
-                      onMouseLeave={(e: React.MouseEvent<HTMLElement>) => { if (warnReason.trim()) e.currentTarget.style.background = 'rgba(217,119,6,0.85)'; }}
-                    >
-                      Send Warning
-                    </button>
-                    <button
-                      onClick={() => { setActionMode(null); setWarnReason(''); }}
-                      style={{
-                        padding: '0.5rem 1rem',
-                        background: '#FFFFFF',
-                        color: '#475569',
-                        borderRadius: '0.5rem',
-                        fontWeight: 500,
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontSize: '0.875rem',
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Inline confirmation: Suspend Booth */}
-              {actionMode === 'suspend' && (
-                <div
-                  style={{
-                    background: 'rgba(239,68,68,0.08)',
-                    border: '1px solid rgba(239,68,68,0.3)',
-                    borderRadius: '0.75rem',
-                    padding: '1rem',
-                  }}
-                >
-                  <div className="flex items-start gap-2 mb-3">
-                    <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#F87171' }} />
-                    <p className="text-sm font-medium" style={{ color: '#F87171' }}>
-                      This will suspend the booth and close the complaint. This action will be logged and visible to the booth owner.
-                    </p>
-                  </div>
+                  <p className="text-xs mb-2" style={{ color: '#64748B' }}>Resolution action:</p>
+                  <select
+                    value={resolveAction} onChange={e => { setResolveAction(Number(e.target.value) as ComplaintResolutionAction); setSuspendConfirm(false); }}
+                    disabled={submitting}
+                    style={{ width: '100%', padding: '0.5rem 0.75rem', background: '#F1F5F9', border: '1px solid #E5E7EB', borderRadius: '0.5rem', fontSize: '0.875rem', color: '#374151', outline: 'none', marginBottom: '0.75rem', opacity: submitting ? 0.6 : 1 }}
+                  >
+                    <option value={ComplaintResolutionAction.NoViolation}>Resolved without penalty</option>
+                    <option value={ComplaintResolutionAction.Warning}>Warning</option>
+                    <option value={ComplaintResolutionAction.SuspendBooth}>Suspend Booth</option>
+                  </select>
+                  {needsPolicyViolation && (
+                    <textarea
+                      value={resolvePolicyViolation} onChange={e => setResolvePolicyViolation(e.target.value)}
+                      placeholder="Describe the policy violation (required for Warning/Suspend)..."
+                      rows={2} disabled={submitting}
+                      style={{ width: '100%', padding: '0.5rem 0.75rem', background: '#F1F5F9', border: '1px solid rgba(217,119,6,0.3)', borderRadius: '0.5rem', fontSize: '0.875rem', color: '#374151', outline: 'none', resize: 'vertical', boxSizing: 'border-box', marginBottom: '0.75rem', opacity: submitting ? 0.6 : 1 }}
+                    />
+                  )}
+                  {resolveAction === ComplaintResolutionAction.SuspendBooth && (
+                    <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '0.5rem', padding: '0.75rem', marginBottom: '0.75rem' }}>
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#F87171' }} />
+                        <div>
+                          <p className="text-sm font-medium" style={{ color: '#F87171' }}>This will suspend the booth. The booth owner will be notified.</p>
+                          <label className="flex items-center gap-2 mt-2" style={{ cursor: submitting ? 'default' : 'pointer' }}>
+                            <input type="checkbox" checked={suspendConfirm} onChange={e => setSuspendConfirm(e.target.checked)} disabled={submitting} />
+                            <span className="text-sm" style={{ color: '#DC2626' }}>I confirm this booth should be suspended</span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <button
-                      onClick={handleSuspendConfirm}
-                      style={{
-                        padding: '0.5rem 1.25rem',
-                        background: 'rgba(239,68,68,0.85)',
-                        color: '#fff',
-                        borderRadius: '0.5rem',
-                        fontWeight: 500,
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontSize: '0.875rem',
-                        transition: 'background 0.15s',
-                      }}
-                      onMouseEnter={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = 'rgba(239,68,68,1)')}
-                      onMouseLeave={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = 'rgba(239,68,68,0.85)')}
+                      onClick={handleResolveSubmit} disabled={!canSubmitResolve || submitting}
+                      style={{ padding: '0.5rem 1.25rem', background: canSubmitResolve && !submitting ? 'rgba(16,185,129,0.8)' : 'rgba(16,185,129,0.35)', color: '#fff', borderRadius: '0.5rem', fontWeight: 500, border: 'none', cursor: canSubmitResolve && !submitting ? 'pointer' : 'default', fontSize: '0.875rem', transition: 'background 0.15s' }}
                     >
-                      Confirm Suspension
+                      {submitting ? 'Submitting...' : 'Confirm Resolve'}
                     </button>
-                    <button
-                      onClick={() => setActionMode(null)}
-                      style={{
-                        padding: '0.5rem 1rem',
-                        background: '#FFFFFF',
-                        color: '#475569',
-                        borderRadius: '0.5rem',
-                        fontWeight: 500,
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontSize: '0.875rem',
-                      }}
-                    >
-                      Cancel
-                    </button>
+                    <button onClick={() => setActionMode(null)} disabled={submitting} style={{ padding: '0.5rem 1rem', background: '#FFFFFF', color: '#475569', borderRadius: '0.5rem', fontWeight: 500, border: 'none', cursor: 'pointer', fontSize: '0.875rem' }}>Cancel</button>
                   </div>
                 </div>
               )}
 
-              {/* Action buttons row */}
-              <div className="grid grid-cols-3 gap-3">
-                <button
-                  onClick={() => setActionMode(actionMode === 'resolve' ? null : 'resolve')}
-                  style={{
-                    padding: '0.75rem 1rem',
-                    background: actionMode === 'resolve' ? 'rgba(16,185,129,1)' : 'rgba(16,185,129,0.8)',
-                    color: '#fff',
-                    borderRadius: '0.5rem',
-                    fontWeight: 500,
-                    border: actionMode === 'resolve' ? '2px solid rgba(16,185,129,0.6)' : 'none',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem',
-                    fontSize: '0.875rem',
-                    transition: 'background 0.15s',
-                  }}
-                  onMouseEnter={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = 'rgba(16,185,129,1)')}
-                  onMouseLeave={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = actionMode === 'resolve' ? 'rgba(16,185,129,1)' : 'rgba(16,185,129,0.8)')}
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  Resolve
-                </button>
-                <button
-                  onClick={() => setActionMode(actionMode === 'warn' ? null : 'warn')}
-                  style={{
-                    padding: '0.75rem 1rem',
-                    background: actionMode === 'warn' ? 'rgba(217,119,6,1)' : 'rgba(217,119,6,0.8)',
-                    color: '#fff',
-                    borderRadius: '0.5rem',
-                    fontWeight: 500,
-                    border: actionMode === 'warn' ? '2px solid rgba(217,119,6,0.6)' : 'none',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem',
-                    fontSize: '0.875rem',
-                    transition: 'background 0.15s',
-                  }}
-                  onMouseEnter={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = 'rgba(217,119,6,1)')}
-                  onMouseLeave={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = actionMode === 'warn' ? 'rgba(217,119,6,1)' : 'rgba(217,119,6,0.8)')}
-                >
-                  <AlertTriangle className="w-4 h-4" />
-                  Warn Booth
-                </button>
-                <button
-                  onClick={() => setActionMode(actionMode === 'suspend' ? null : 'suspend')}
-                  style={{
-                    padding: '0.75rem 1rem',
-                    background: actionMode === 'suspend' ? 'rgba(239,68,68,1)' : 'rgba(239,68,68,0.8)',
-                    color: '#fff',
-                    borderRadius: '0.5rem',
-                    fontWeight: 500,
-                    border: actionMode === 'suspend' ? '2px solid rgba(239,68,68,0.6)' : 'none',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem',
-                    fontSize: '0.875rem',
-                    transition: 'background 0.15s',
-                  }}
-                  onMouseEnter={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = 'rgba(239,68,68,1)')}
-                  onMouseLeave={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = actionMode === 'suspend' ? 'rgba(239,68,68,1)' : 'rgba(239,68,68,0.8)')}
-                >
-                  <AlertCircle className="w-4 h-4" />
-                  Suspend Booth
-                </button>
-              </div>
+              {actionMode === 'reject' && (
+                <div style={{ background: 'rgba(107,114,128,0.08)', border: '1px solid rgba(107,114,128,0.25)', borderRadius: '0.75rem', padding: '1rem' }}>
+                  <p className="text-sm font-medium mb-2" style={{ color: '#6B7280' }}>Reject this complaint</p>
+                  <p className="text-xs mb-3" style={{ color: '#9CA3AF' }}>The booth will not be affected. No penalty will be applied.</p>
+                  <textarea
+                    value={rejectReason} onChange={e => setRejectReason(e.target.value)}
+                    placeholder="Enter rejection reason (min 10 characters)..."
+                    rows={3} disabled={submitting}
+                    style={{ width: '100%', padding: '0.5rem 0.75rem', background: '#F1F5F9', border: '1px solid rgba(107,114,128,0.3)', borderRadius: '0.5rem', fontSize: '0.875rem', color: '#374151', outline: 'none', resize: 'vertical', boxSizing: 'border-box', marginBottom: '0.75rem', opacity: submitting ? 0.6 : 1 }}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleRejectSubmit} disabled={!canSubmitReject || submitting}
+                      style={{ padding: '0.5rem 1.25rem', background: canSubmitReject && !submitting ? 'rgba(107,114,128,0.85)' : 'rgba(107,114,128,0.35)', color: '#fff', borderRadius: '0.5rem', fontWeight: 500, border: 'none', cursor: canSubmitReject && !submitting ? 'pointer' : 'default', fontSize: '0.875rem', transition: 'background 0.15s' }}
+                    >
+                      {submitting ? 'Submitting...' : 'Confirm Reject'}
+                    </button>
+                    <button onClick={() => setActionMode(null)} disabled={submitting} style={{ padding: '0.5rem 1rem', background: '#FFFFFF', color: '#475569', borderRadius: '0.5rem', fontWeight: 500, border: 'none', cursor: 'pointer', fontSize: '0.875rem' }}>Cancel</button>
+                  </div>
+                </div>
+              )}
+
+              {isPending && actionMode === null && (
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setActionMode('resolve')} disabled={submitting}
+                    style={{ padding: '0.75rem 1rem', background: 'rgba(16,185,129,0.8)', color: '#fff', borderRadius: '0.5rem', fontWeight: 500, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '0.875rem', transition: 'background 0.15s', opacity: submitting ? 0.5 : 1 }}
+                    onMouseEnter={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = 'rgba(16,185,129,1)')}
+                    onMouseLeave={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = 'rgba(16,185,129,0.8)')}
+                  >
+                    <CheckCircle className="w-4 h-4" />Resolve
+                  </button>
+                  <button
+                    onClick={() => setActionMode('reject')} disabled={submitting}
+                    style={{ padding: '0.75rem 1rem', background: 'rgba(107,114,128,0.8)', color: '#fff', borderRadius: '0.5rem', fontWeight: 500, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '0.875rem', transition: 'background 0.15s', opacity: submitting ? 0.5 : 1 }}
+                    onMouseEnter={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = 'rgba(107,114,128,1)')}
+                    onMouseLeave={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = 'rgba(107,114,128,0.8)')}
+                  >
+                    <XCircle className="w-4 h-4" />Reject
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
       </Modal>
 
-      {/* User Profile Modal */}
-      <Modal isOpen={!!selectedUser} onClose={() => setSelectedUserId(null)} title="User Profile" size="md">
-        {selectedUser && (
+      <Modal isOpen={!!selectedUserId} onClose={() => setSelectedUserId(null)} title="User Profile" size="md">
+        {selectedUserId && userLookup[selectedUserId] && (
           <div className="space-y-6">
             <div className="flex items-center gap-4">
-              <img src={(selectedUser as any).avatar} alt={(selectedUser as any).name} className="w-20 h-20 rounded-full" />
+              {getUserAvatar(selectedUserId)
+                ? <ImageWithFallback src={getUserAvatar(selectedUserId)} alt={getUserName(selectedUserId)} className="w-20 h-20 rounded-full" />
+                : <div className="w-20 h-20 rounded-full flex items-center justify-center" style={{ background: '#E5E7EB', color: '#64748B', fontSize: '1.5rem', fontWeight: 600 }}>{getUserName(selectedUserId).charAt(0).toUpperCase()}</div>}
               <div>
-                <h3 className="text-xl font-semibold" style={{ color: 'rgba(255,255,255,0.9)' }}>{(selectedUser as any).name}</h3>
-                <span
-                  style={
-                    (selectedUser as any).role === 'booth_owner'
-                      ? { display: 'inline-block', marginTop: '0.5rem', background: '#F3F4F6', color: '#818CF8', border: '1px solid #E5E7EB', borderRadius: '9999px', padding: '2px 10px', fontSize: '0.8rem', fontWeight: 500 }
-                      : { display: 'inline-block', marginTop: '0.5rem', background: 'rgba(20,184,166,0.15)', color: '#2DD4BF', border: '1px solid rgba(20,184,166,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '0.8rem', fontWeight: 500 }
-                  }
-                >
-                  {(selectedUser as any).role === 'booth_owner' ? 'Booth Owner' : 'Customer'}
+                <h3 className="text-xl font-semibold" style={{ color: '#111827' }}>{getUserName(selectedUserId)}</h3>
+                <span style={{ display: 'inline-block', marginTop: '0.5rem', background: '#F3F4F6', color: '#818CF8', border: '1px solid #E5E7EB', borderRadius: '9999px', padding: '2px 10px', fontSize: '0.8rem', fontWeight: 500 }}>
+                  {userLookup[selectedUserId].role}
                 </span>
-                <span
-                  style={
-                    (selectedUser as any).status === 'Active'
-                      ? { display: 'inline-block', marginTop: '0.5rem', marginLeft: '0.5rem', background: 'rgba(16,185,129,0.15)', color: '#34D399', border: '1px solid rgba(16,185,129,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '0.8rem', fontWeight: 500 }
-                      : { display: 'inline-block', marginTop: '0.5rem', marginLeft: '0.5rem', background: 'rgba(239,68,68,0.15)', color: '#F87171', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '0.8rem', fontWeight: 500 }
-                  }
-                >
-                  {(selectedUser as any).status}
+                <span style={{ display: 'inline-block', marginTop: '0.5rem', marginLeft: '0.5rem', background: userLookup[selectedUserId].status === 'Active' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)', color: userLookup[selectedUserId].status === 'Active' ? '#34D399' : '#F87171', border: '1px solid ' + (userLookup[selectedUserId].status === 'Active' ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.25)'), borderRadius: '9999px', padding: '2px 10px', fontSize: '0.8rem', fontWeight: 500 }}>
+                  {userLookup[selectedUserId].status}
                 </span>
               </div>
             </div>
-
             <div className="space-y-3">
               {[
-                { icon: <Mail className="w-5 h-5" />, label: 'Email', value: (selectedUser as any).email },
-                { icon: <Phone className="w-5 h-5" />, label: 'Phone', value: (selectedUser as any).phone },
-                { icon: <Calendar className="w-5 h-5" />, label: 'Registered', value: (selectedUser as any).registered },
+                { label: 'Email', value: userLookup[selectedUserId].email },
+                { label: 'Phone', value: userLookup[selectedUserId].phone || 'No data available' },
+                { label: 'Registered', value: new Date(userLookup[selectedUserId].createdAt || '').toLocaleDateString() },
               ].map(item => (
-                <div
-                  key={item.label}
-                  className="flex items-center gap-3"
-                  style={{
-                    background: '#FFFFFF',
-                    border: '1px solid #E5E7EB',
-                    borderRadius: '0.75rem',
-                    padding: '0.75rem',
-                  }}
-                >
-                  <span style={{ color: '#64748B' }}>{item.icon}</span>
+                <div key={item.label} className="flex items-center gap-3" style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '0.75rem', padding: '0.75rem' }}>
                   <div>
                     <p className="text-xs" style={{ color: '#64748B' }}>{item.label}</p>
                     <p className="text-sm font-medium" style={{ color: '#374151' }}>{item.value}</p>
                   </div>
                 </div>
               ))}
-            </div>
-
-            <div
-              className="pt-4 flex gap-3"
-              style={{ borderTop: '1px solid #E5E7EB' }}
-            >
-              <button
-                style={{
-                  flex: 1,
-                  padding: '0.5rem 1rem',
-                  background: 'rgba(99,102,241,0.8)',
-                  color: '#fff',
-                  borderRadius: '0.5rem',
-                  fontWeight: 500,
-                  border: 'none',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem',
-                  fontSize: '0.875rem',
-                  transition: 'background 0.15s',
-                }}
-                onMouseEnter={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = 'rgba(99,102,241,1)')}
-                onMouseLeave={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = 'rgba(99,102,241,0.8)')}
-              >
-                <Mail className="w-4 h-4" />
-                Send Email
-              </button>
-              <button
-                style={{
-                  flex: 1,
-                  padding: '0.5rem 1rem',
-                  background: 'rgba(16,185,129,0.8)',
-                  color: '#fff',
-                  borderRadius: '0.5rem',
-                  fontWeight: 500,
-                  border: 'none',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem',
-                  fontSize: '0.875rem',
-                  transition: 'background 0.15s',
-                }}
-                onMouseEnter={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = 'rgba(16,185,129,1)')}
-                onMouseLeave={(e: React.MouseEvent<HTMLElement>) => (e.currentTarget.style.background = 'rgba(16,185,129,0.8)')}
-              >
-                <Phone className="w-4 h-4" />
-                Call
-              </button>
             </div>
           </div>
         )}

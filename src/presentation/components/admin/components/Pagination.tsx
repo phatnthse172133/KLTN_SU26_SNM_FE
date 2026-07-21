@@ -40,7 +40,7 @@ export function Pagination({ currentPage, totalPages, onPageChange, totalItems, 
 
   return (
     <div
-      className="flex items-center justify-between px-5 py-3"
+      className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5"
       style={{ borderTop: '1px solid #E5E7EB' }}
     >
       <p style={{ fontSize: '0.8125rem', color: '#64748B' }}>
@@ -50,8 +50,10 @@ export function Pagination({ currentPage, totalPages, onPageChange, totalItems, 
         <span style={{ color: '#111827', fontWeight: 600 }}>{totalItems}</span>
       </p>
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex max-w-full items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0" aria-label="Pagination">
         <button
+          type="button"
+          aria-label="Previous page"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
           className="flex items-center justify-center w-8 h-8 rounded-lg transition-all"
@@ -69,6 +71,9 @@ export function Pagination({ currentPage, totalPages, onPageChange, totalItems, 
         {getPageNumbers().map((page, index) =>
           typeof page === 'number' ? (
             <button
+              type="button"
+              aria-label={`Go to page ${page}`}
+              aria-current={currentPage === page ? 'page' : undefined}
               key={`page-${page}`}
               onClick={() => onPageChange(page)}
               className="flex items-center justify-center h-8 rounded-lg text-sm transition-all"
@@ -95,6 +100,8 @@ export function Pagination({ currentPage, totalPages, onPageChange, totalItems, 
         )}
 
         <button
+          type="button"
+          aria-label="Next page"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
           className="flex items-center justify-center w-8 h-8 rounded-lg transition-all"
