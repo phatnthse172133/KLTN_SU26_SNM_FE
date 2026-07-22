@@ -20,6 +20,13 @@ export function LoginRegister() {
   const { login } = useAuth();
   const router = useRouter();
 
+  const getLandingPath = (role?: string | null) => {
+    const normalizedRole = role?.replace(/[_\s-]/g, "").toLowerCase();
+    if (normalizedRole === "admin") return "/admin";
+    if (normalizedRole === "boothowner") return "/boothowner";
+    return "/login";
+  };
+
   const resetFeedback = () => {
     setError("");
     setMessage("");
@@ -38,7 +45,7 @@ export function LoginRegister() {
           return;
         }
         login(response.data.accessToken, response.data.refreshToken, response.data.user);
-        router.replace("/boothowner");
+        router.replace(getLandingPath(response.data.user?.role ?? response.data.role));
         return;
       }
 

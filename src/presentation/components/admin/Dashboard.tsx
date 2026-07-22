@@ -18,15 +18,15 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { adminBoothService } from "@/application/features/admin/adminBoothService";
-import { adminComplaintService, ComplaintStatus } from "@/application/features/admin/adminComplaintService";
 import {
   adminDashboardService,
   DashboardStatsDto,
   RevenueChartDto,
+  DashboardPendingComplaintDto,
+  DashboardRecentRegistrationDto,
 } from "@/application/features/admin/adminDashboardService";
-import type { Booth, Complaint } from "@/shared/types";
 import { getErrorMessage } from "@/shared/errors/errorMapper";
+import { useRouter } from "next/navigation";
 
 type DateRange = "week" | "month" | "year";
 type ChartView = "revenue" | "newBooths";
@@ -155,15 +155,15 @@ export function Dashboard() {
   const [chartView, setChartView] = useState<ChartView>("revenue");
   const [stats, setStats] = useState<DashboardStatsDto>(emptyStats);
   const [chartData, setChartData] = useState<RevenueChartDto[]>([]);
-  const [booths, setBooths] = useState<Booth[]>([]);
-  const [complaints, setComplaints] = useState<Complaint[]>([]);
-  const [pendingComplaintsTotal, setPendingComplaintsTotal] = useState(0);
+  const [recentRegistrations, setRecentRegistrations] = useState<DashboardRecentRegistrationDto[]>([]);
+  const [pendingComplaints, setPendingComplaints] = useState<DashboardPendingComplaintDto[]>([]);
   const [pendingLoading, setPendingLoading] = useState(true);
   const [pendingError, setPendingError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [pendingReloadKey, setPendingReloadKey] = useState(0);
+  const router = useRouter();
 
   const availableYears = useMemo(
     () => Array.from({ length: 4 }, (_, index) => now.getFullYear() - index),
@@ -242,22 +242,20 @@ export function Dashboard() {
         setPendingLoading(true);
         setPendingError(null);
         return Promise.allSettled([
-          adminBoothService.getAllBooths(1, 10),
-          adminComplaintService.getAllComplaints(1, 6, { status: ComplaintStatus.Pending }),
+          adminDashboardService.getRecentBoothRegistrations(5),
+          adminDashboardService.getPendingComplaints(6),
         ]);
       })
       .then((results) => {
         if (!mounted || !results) return;
         const [boothResponse, complaintResponse] = results;
         if (boothResponse.status === "fulfilled") {
-          setBooths(boothResponse.value.data?.items ?? []);
+          setRecentRegistrations(boothResponse.value.data ?? []);
         }
         if (complaintResponse.status === "fulfilled") {
-          setComplaints(complaintResponse.value.data?.items ?? []);
-          setPendingComplaintsTotal(complaintResponse.value.data?.total ?? 0);
+          setPendingComplaints(complaintResponse.value.data ?? []);
         } else {
-          setComplaints([]);
-          setPendingComplaintsTotal(0);
+          setPendingComplaints([]);
           setPendingError(getErrorMessage(complaintResponse.reason));
         }
       })
@@ -266,9 +264,6 @@ export function Dashboard() {
       });
     return () => { mounted = false; };
   }, [pendingReloadKey]);
-
-  const recentBooths = useMemo(() => booths.slice(0, 6), [booths]);
-  const pendingComplaints = useMemo(() => complaints.slice(0, 6), [complaints]);
 
   const chartConfig = {
     revenue: { label: "Subscription Revenue", shortLabel: "Revenue", color: "#111827", dataKey: "revenue" },
@@ -410,7 +405,7 @@ export function Dashboard() {
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
               <XAxis dataKey="date" tickFormatter={formatChartDate} axisLine={false} tickLine={false} tick={{ fill: "#64748B", fontSize: 11 }} />
               <YAxis tickFormatter={value => chartView === "revenue" ? formatRevenue(Number(value)) : String(value)} axisLine={false} tickLine={false} tick={{ fill: "#64748B", fontSize: 11 }} />
-              <Tooltip labelFormatter={label => new Date(String(label)).toLocaleDateString("en-US")} formatter={value => chartView === "revenue" ? `${Number(value).toLocaleString("en-US")} â‚«` : Number(value).toLocaleString("en-US")} />
+              <Tooltip labelFormatter={label => new Date(String(label)).toLocaleDateString("en-US")} formatter={value => chartView === "revenue" ? `${Number(value).toLocaleString("en-US")} ₫` : Number(value).toLocaleString("en-US")} />
               <Line type="monotone" dataKey={chartConfig[chartView].dataKey} stroke={chartConfig[chartView].color} strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
             </LineChart>
           </ResponsiveContainer>
@@ -419,20 +414,20 @@ export function Dashboard() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-xl p-6" style={{ background: "#FFFFFF", border: "1px solid #E5E7EB", boxShadow: "0 4px 18px rgba(0,0,0,0.04)" }}>
-          <div className="flex items-center justify-between mb-4"><h3 style={{ color: "#111827" }}>Recent Booths</h3><span className="text-xs px-2.5 py-0.5 rounded-full" style={{ background: "rgba(16,185,129,0.1)", color: "#10B981" }}>{recentBooths.length} latest</span></div>
+          <div className="flex items-center justify-between mb-4"><h3 style={{ color: "#111827" }}>Recent Booth Registrations</h3><span className="text-xs px-2.5 py-0.5 rounded-full" style={{ background: "rgba(16,185,129,0.1)", color: "#10B981" }}>{recentRegistrations.length} latest</span></div>
           <div className="space-y-2">
-            {recentBooths.length === 0 ? <p className="text-sm text-center py-6 text-gray-500">No data available</p> : recentBooths.map(booth => (
-              <div key={booth.id} className="flex items-center gap-3 p-3 rounded-lg border border-gray-200">
+            {recentRegistrations.length === 0 ? <p className="text-sm text-center py-6 text-gray-500">No data available</p> : recentRegistrations.map(reg => (
+              <div key={reg.id} className="flex items-center gap-3 p-3 rounded-lg border border-gray-200">
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-emerald-50"><Store className="w-4 h-4 text-emerald-600" /></div>
-                <div className="flex-1 min-w-0"><p className="text-sm truncate text-gray-900">{booth.boothName || "No data available"}</p><p className="text-xs truncate text-gray-500">{booth.boothOwnerName || booth.boothOwnerEmail || "No owner info"}</p></div>
-                <span className="text-xs text-gray-500">{booth.status}</span>
+                <div className="flex-1 min-w-0"><p className="text-sm truncate text-gray-900">{reg.boothName || "No data available"}</p><p className="text-xs truncate text-gray-500">{reg.ownerName || "No owner info"} • {reg.marketName}</p></div>
+                <span className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded-md">{reg.status}</span>
               </div>
             ))}
           </div>
         </div>
 
         <div className="rounded-xl p-6" style={{ background: "#FFFFFF", border: "1px solid #E5E7EB", boxShadow: "0 4px 18px rgba(0,0,0,0.04)" }}>
-          <div className="flex items-center justify-between mb-4"><h3 style={{ color: "#111827" }}>Pending Complaints</h3><span className="text-xs px-2.5 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.1)", color: "#EF4444" }}>{pendingComplaintsTotal} pending</span></div>
+          <div className="flex items-center justify-between mb-4"><h3 style={{ color: "#111827" }}>Pending Complaints</h3><span className="text-xs px-2.5 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.1)", color: "#EF4444" }}>{pendingComplaints.length} latest</span></div>
           <div className="space-y-2">
             {pendingError ? (
               <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -446,8 +441,18 @@ export function Dashboard() {
             ) : pendingComplaints.length === 0 ? (
               <p className="text-sm text-center py-6 text-gray-500">No pending complaints</p>
             ) : pendingComplaints.map(complaint => (
-              <div key={complaint.id} className="flex items-center gap-3 p-3 rounded-lg border border-gray-200">
-                <div className="flex-1 min-w-0"><p className="text-sm truncate text-gray-900">{complaint.title || "Untitled complaint"}</p><p className="text-xs truncate text-gray-500">{complaint.description || "No data available"}</p></div>
+              <div key={complaint.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg border border-gray-200">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate text-gray-900">{complaint.title || "Untitled complaint"}</p>
+                  <p className="text-xs truncate text-gray-500 mt-0.5">{complaint.boothName} • {complaint.customerName}</p>
+                  <p className="text-xs text-gray-400 mt-1">{new Date(complaint.createdAt).toLocaleDateString()}</p>
+                </div>
+                <button
+                  onClick={() => router.push(`/admin/complaints?id=${complaint.id}`)}
+                  className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-medium text-xs rounded-lg transition-colors whitespace-nowrap self-start sm:self-center shrink-0"
+                >
+                  Handle
+                </button>
               </div>
             ))}
           </div>

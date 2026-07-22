@@ -11,7 +11,7 @@ import { Pagination } from './components/Pagination';
 import { ImageWithFallback } from '../ImageWithFallback';
 import { getErrorMessage } from '@/shared/errors/errorMapper';
 
-type StatusTab = 'all' | 'Pending' | 'Resolved' | 'Rejected';
+type StatusTab = 'all' | 'Resolved' | 'Rejected';
 type ActionMode = null | 'resolve' | 'reject';
 
 interface BoothInfo {
@@ -26,7 +26,6 @@ interface BoothInfo {
 
 const statusTabs: { key: StatusTab; label: string }[] = [
   { key: 'all', label: 'All' },
-  { key: 'Pending', label: 'Pending' },
   { key: 'Resolved', label: 'Resolved' },
   { key: 'Rejected', label: 'Rejected' },
 ];
@@ -71,7 +70,11 @@ const mapBackendResolutionAction = (val: unknown): string | null => {
   return map[String(val)] ?? String(val);
 };
 
-export function Complaints() {
+interface ComplaintsProps {
+  initialComplaintId?: string;
+}
+
+export function Complaints({ initialComplaintId }: ComplaintsProps = {}) {
   const [complaintsList, setComplaintsList] = useState<Complaint[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [userLookup, setUserLookup] = useState<Record<string, UserProfile>>({});
@@ -90,6 +93,7 @@ export function Complaints() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
   const [actionMode, setActionMode] = useState<ActionMode>(null);
+  const [hasOpenedInitial, setHasOpenedInitial] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -105,11 +109,11 @@ export function Complaints() {
     setLoading(true);
     setError(null);
 
-    const statusFilter = activeTab === 'all' ? undefined : (
-      activeTab === 'Pending' ? ComplaintStatus.Pending :
-      activeTab === 'Resolved' ? ComplaintStatus.Resolved :
-      ComplaintStatus.Rejected
-    );
+    const statusFilter = activeTab === 'all'
+      ? undefined
+      : activeTab === 'Resolved'
+        ? ComplaintStatus.Resolved
+        : ComplaintStatus.Rejected;
 
     const [complaintResult, countsResult, userResult, boothResult, marketResult] = await Promise.allSettled([
       adminComplaintService.getAllComplaints(currentPage, itemsPerPage, { status: statusFilter, keyword: searchQuery || undefined }),
@@ -180,7 +184,7 @@ export function Complaints() {
   const countByStatus = (status: string) => {
     if (!statusCounts) return undefined;
     if (status === 'all') return statusCounts.All;
-    return statusCounts[status as 'Pending' | 'Resolved' | 'Rejected'] ?? 0;
+    return statusCounts[status as 'Resolved' | 'Rejected'] ?? 0;
   };
 
   const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage));
@@ -194,7 +198,7 @@ export function Complaints() {
     ? { id: boothLookup[selectedComplaint.boothId].boothOwnerId, name: boothLookup[selectedComplaint.boothId].boothOwnerName, avatar: getUserAvatar(boothLookup[selectedComplaint.boothId].boothOwnerId) }
     : null;
 
-  const resetFormState = () => {
+  const resetFormState = useCallback(() => {
     setActionMode(null);
     setActionError(null);
     setResolveResponse('');
@@ -202,7 +206,18 @@ export function Complaints() {
     setResolvePolicyViolation('');
     setSuspendConfirm(false);
     setRejectReason('');
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!initialComplaintId || hasOpenedInitial) return;
+    if (complaintsList.some(complaint => complaint.id === initialComplaintId)) {
+      void Promise.resolve().then(() => {
+        setHasOpenedInitial(true);
+        setSelectedComplaintId(initialComplaintId);
+        resetFormState();
+      });
+    }
+  }, [complaintsList, initialComplaintId, resetFormState, hasOpenedInitial]);
 
   const handleResolveSubmit = async () => {
     if (!selectedComplaintId || !resolveResponse.trim() || resolveResponse.trim().length < 10) return;
@@ -433,7 +448,7 @@ export function Complaints() {
                     : <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: '#E5E7EB', color: '#64748B', fontSize: '0.875rem', fontWeight: 600 }}>{complaintUser.name?.charAt(0)?.toUpperCase() || '?'}</div>}
                   <div>
                     <p className="font-medium" style={{ color: '#374151' }}>{complaintUser.name}</p>
-                    <p className="text-sm" style={{ color: '#818CF8' }}>View profile â†’</p>
+                    <p className="text-sm" style={{ color: '#818CF8' }}>View profile →</p>
                   </div>
                 </div>
               </button>
@@ -462,7 +477,7 @@ export function Complaints() {
                     : <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.15)', color: '#F59E0B', fontSize: '0.875rem', fontWeight: 600 }}>{boothOwner.name?.charAt(0)?.toUpperCase() || '?'}</div>}
                   <div>
                     <p className="font-medium" style={{ color: '#374151' }}>{boothOwner.name}</p>
-                    <p className="text-sm" style={{ color: '#818CF8' }}>View profile â†’</p>
+                    <p className="text-sm" style={{ color: '#818CF8' }}>View profile →</p>
                   </div>
                 </div>
               </button>

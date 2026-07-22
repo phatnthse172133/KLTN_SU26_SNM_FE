@@ -199,7 +199,7 @@ export function BoothModerationTable(props: BoothModerationTableProps) {
                           <div className="min-w-0">
                             <div className="truncate font-semibold text-slate-900 group-hover:text-indigo-900 transition-colors" title={b.boothName}>{b.boothName}</div>
                             {b.zoneName && (
-                              <div className="text-xs text-slate-500 mt-1">{b.zoneName}{b.slotNumber ? ` Â· ${b.slotNumber}` : ''}</div>
+                              <div className="text-xs text-slate-500 mt-1">{b.zoneName}{b.slotNumber ? ` · ${b.slotNumber}` : ''}</div>
                             )}
                           </div>
                         </div>
@@ -323,7 +323,7 @@ export function BoothModerationTable(props: BoothModerationTableProps) {
                       </div>
                       <p className="text-sm text-slate-600 truncate mt-0.5">{b.nightMarketName || 'No Market'}</p>
                       {b.zoneName && (
-                        <p className="text-xs text-slate-500 mt-1">{b.zoneName}{b.slotNumber ? ` Â· ${b.slotNumber}` : ''}</p>
+                        <p className="text-xs text-slate-500 mt-1">{b.zoneName}{b.slotNumber ? ` · ${b.slotNumber}` : ''}</p>
                       )}
                     </div>
                   </div>
