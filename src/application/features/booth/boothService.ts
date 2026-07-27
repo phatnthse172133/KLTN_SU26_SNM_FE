@@ -20,6 +20,9 @@ export const boothService = {
   updateMyBooth: async (data: Pick<Booth, "boothName"> & Partial<Pick<Booth, "description" | "phoneNumber" | "thumbnailUrl" | "paymentQrImage" | "openTime" | "closeTime">>) => {
     return apiClient.put<BaseResponse<Booth>>("/booths/mine", data);
   },
+  togglePauseMyBooth: async () => {
+    return apiClient.patch<BaseResponse<Booth>>("/booths/mine/toggle-pause", {});
+  },
   getAllBooths: async (page = 1, pageSize = 10) => {
     return apiClient.get<BaseResponse<PaginationResponse<Booth>>>(`/booths?Page=${page}&PageSize=${pageSize}`);
   },

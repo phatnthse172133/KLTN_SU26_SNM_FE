@@ -27,24 +27,16 @@ interface BoothModerationTableProps {
 }
 
 const STATUS_BADGE: Record<BoothModerationStatus, string> = {
-  PendingApproval: 'bg-amber-100 text-amber-700',
-  Active:          'bg-emerald-100 text-emerald-700',
-  Inactive:        'bg-gray-100 text-gray-600',
-  Suspended:       'bg-red-100 text-red-700',
-  Closed:          'bg-slate-100 text-slate-600',
+  Active:   'bg-emerald-100 text-emerald-700',
+  Inactive: 'bg-gray-100 text-gray-600',
+  Banned:   'bg-red-100 text-red-700',
 };
 
 const STATUS_LABEL: Record<BoothModerationStatus, string> = {
-  PendingApproval: 'Pending Approval',
-  Active:          'Active',
-  Inactive:        'Inactive',
-  Suspended:       'Suspended',
-  Closed:          'Closed',
+  Active:   'Active',
+  Inactive: 'Inactive',
+  Banned:   'Banned',
 };
-
-function canModerate(status: BoothModerationStatus): status is 'Active' | 'Suspended' {
-  return status === 'Active' || status === 'Suspended';
-}
 
 export function BoothModerationTable(props: BoothModerationTableProps) {
   const {
@@ -122,10 +114,8 @@ export function BoothModerationTable(props: BoothModerationTableProps) {
           >
             <option value="">All Statuses</option>
             <option value="Active">Active</option>
-            <option value="Suspended">Suspended</option>
-            <option value="PendingApproval">Pending Approval</option>
             <option value="Inactive">Inactive</option>
-            <option value="Closed">Closed</option>
+            <option value="Banned">Banned</option>
           </select>
           <button
             type="button"
@@ -251,19 +241,17 @@ export function BoothModerationTable(props: BoothModerationTableProps) {
                           >
                             <MapPin className="w-3.5 h-3.5" /> Map
                           </button>
-                          {canModerate(b.status) && (
-                            <button
-                              type="button"
-                              onClick={() => openSanction(b.id, b.boothName, b.status)}
-                              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-colors focus:ring-2 outline-none ${
-                                b.status === 'Suspended'
-                                  ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 focus:ring-emerald-500/20'
-                                  : 'text-red-700 bg-red-50 hover:bg-red-100 border border-red-100 focus:ring-red-500/20'
-                              }`}
-                            >
-                              {b.status === 'Suspended' ? <><Unlock className="w-3.5 h-3.5" /> Restore</> : <><Lock className="w-3.5 h-3.5" /> Suspend</>}
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => openSanction(b.id, b.boothName, b.status)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-colors focus:ring-2 outline-none ${
+                              b.status === 'Banned'
+                                ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 focus:ring-emerald-500/20'
+                                : 'text-red-700 bg-red-50 hover:bg-red-100 border border-red-100 focus:ring-red-500/20'
+                            }`}
+                          >
+                            {b.status === 'Banned' ? <><Unlock className="w-3.5 h-3.5" /> Restore Booth</> : <><Lock className="w-3.5 h-3.5" /> Ban Booth</>}
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -358,19 +346,17 @@ export function BoothModerationTable(props: BoothModerationTableProps) {
                     >
                       <Eye className="w-4 h-4" /> Details
                     </button>
-                    {canModerate(b.status) && (
-                      <button
-                        type="button"
-                        onClick={() => openSanction(b.id, b.boothName, b.status)}
-                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-bold rounded-xl transition-colors focus:ring-2 outline-none ${
-                          b.status === 'Suspended'
-                            ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 focus:ring-emerald-500/20'
-                            : 'text-red-700 bg-red-50 hover:bg-red-100 border border-red-100 focus:ring-red-500/20'
-                        }`}
-                      >
-                        {b.status === 'Suspended' ? <><Unlock className="w-4 h-4" /> Restore</> : <><Lock className="w-4 h-4" /> Suspend</>}
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => openSanction(b.id, b.boothName, b.status)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-bold rounded-xl transition-colors focus:ring-2 outline-none ${
+                        b.status === 'Banned'
+                          ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 focus:ring-emerald-500/20'
+                          : 'text-red-700 bg-red-50 hover:bg-red-100 border border-red-100 focus:ring-red-500/20'
+                      }`}
+                    >
+                      {b.status === 'Banned' ? <><Unlock className="w-4 h-4" /> Restore Booth</> : <><Lock className="w-4 h-4" /> Ban Booth</>}
+                    </button>
                   </div>
                 </div>
               ))

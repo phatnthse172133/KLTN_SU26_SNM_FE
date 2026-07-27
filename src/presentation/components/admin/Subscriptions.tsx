@@ -1,19 +1,19 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import {
-  CheckCircle, Ban, DollarSign, Calendar, Clock,
+import { 
+  CheckCircle, Ban, DollarSign, Calendar, Clock, 
   Store, Package as PackageIcon, Mail, User, Eye, Phone, CreditCard
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Pagination } from './components/Pagination';
 import { Modal } from './components/Modal';
 import { getErrorMessage } from '@/shared/errors/errorMapper';
-import {
-  adminSubscriptionService,
-  AdminSubscriptionDto,
-  PackageType,
-  SubscriptionStatus
+import { 
+  adminSubscriptionService, 
+  AdminSubscriptionDto, 
+  PackageType, 
+  SubscriptionStatus 
 } from '@/application/features/admin/adminSubscriptionService';
 
 type TabOption = 'All' | 'Booth' | 'Market';
@@ -49,7 +49,7 @@ const tdStyle: React.CSSProperties = {
 export default function Subscriptions() {
   const [activeTab, setActiveTab] = useState<TabOption>('All');
   const [activeStatusTab, setActiveStatusTab] = useState<StatusTabOption>('All');
-
+  
   const [subscriptions, setSubscriptions] = useState<AdminSubscriptionDto[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -141,8 +141,8 @@ export default function Subscriptions() {
               key={tab}
               onClick={() => { setActiveTab(tab); setPage(1); }}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                activeTab === tab
-                  ? 'bg-white text-indigo-700 shadow-sm'
+                activeTab === tab 
+                  ? 'bg-white text-indigo-700 shadow-sm' 
                   : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-50'
               }`}
             >
@@ -156,12 +156,12 @@ export default function Subscriptions() {
               key={tab}
               onClick={() => { setActiveStatusTab(tab); setPage(1); }}
               className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                activeStatusTab === tab
-                  ? 'bg-white text-indigo-700 shadow-sm'
+                activeStatusTab === tab 
+                  ? 'bg-white text-indigo-700 shadow-sm' 
                   : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-50'
               }`}
             >
-              {tab === 'All' ? 'All'
+              {tab === 'All' ? 'All' 
                 : tab === SubscriptionStatus.PendingPayment ? 'Pending Payment'
                 : tab === SubscriptionStatus.Active ? 'Active'
                 : tab === SubscriptionStatus.Expired ? 'Expired'
@@ -231,7 +231,7 @@ export default function Subscriptions() {
                             <div className="text-xs text-indigo-600 mt-1 border-t border-gray-100 pt-1">
                               <span className="font-medium">Buyer:</span> {sub.buyerName}
                               {sub.buyerEmail && <span className="text-gray-500"> ({sub.buyerEmail})</span>}
-                              {sub.buyerPhone && <span className="text-gray-500"> Â· {sub.buyerPhone}</span>}
+                              {sub.buyerPhone && <span className="text-gray-500"> · {sub.buyerPhone}</span>}
                             </div>
                           )}
                         </div>
@@ -253,7 +253,7 @@ export default function Subscriptions() {
                     </td>
                     <td style={tdStyle}>
                       <div className="text-sm font-medium text-gray-900">
-                        {sub.paidAmount > 0 ? new Intl.NumberFormat('en-US').format(sub.paidAmount) + ' VND' : 'â€”'}
+                        {sub.paidAmount > 0 ? new Intl.NumberFormat('en-US').format(sub.paidAmount) + ' VND' : '-'}
                       </div>
                     </td>
                     <td style={tdStyle}>
@@ -274,13 +274,13 @@ export default function Subscriptions() {
             </table>
           )}
         </div>
-
+        
         {totalCount > 0 && (
           <div className="bg-gray-50">
-            <Pagination
-              currentPage={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
+            <Pagination 
+              currentPage={page} 
+              totalPages={totalPages} 
+              onPageChange={setPage} 
               totalItems={totalCount}
               itemsPerPage={pageSize}
             />
@@ -303,7 +303,7 @@ export default function Subscriptions() {
               <DetailCard icon={User} label="Buyer / payer" value={selectedSubscription.buyerName || selectedSubscription.ownerName || 'Not available'} secondary={selectedSubscription.buyerEmail || selectedSubscription.ownerEmail || 'Not available'} />
               <DetailCard icon={Phone} label="Buyer phone" value={selectedSubscription.buyerPhone || 'Not available'} />
               <DetailCard icon={DollarSign} label="Amount paid" value={selectedSubscription.paidAmount > 0 ? `${new Intl.NumberFormat('en-US').format(selectedSubscription.paidAmount)} VND` : 'Not paid'} />
-              <DetailCard icon={Calendar} label="Subscription period" value={`${formatDate(selectedSubscription.startDate)} â€“ ${formatDate(selectedSubscription.endDate)}`} />
+              <DetailCard icon={Calendar} label="Subscription period" value={`${formatDate(selectedSubscription.startDate)} - ${formatDate(selectedSubscription.endDate)}`} />
               <DetailCard icon={Clock} label="Payment time" value={selectedSubscription.paidAt ? formatDateTime(selectedSubscription.paidAt) : 'Not available'} />
             </div>
             {selectedSubscription.payOSOrderCode && (

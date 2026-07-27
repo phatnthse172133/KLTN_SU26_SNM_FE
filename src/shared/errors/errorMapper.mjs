@@ -44,7 +44,7 @@ export function isAppError(error) {
  * @property {boolean} [success]
  * @property {string} [message]
  * @property {string} [Message]
- * @property {{ errorCode?: string; ErrorCode?: string; traceId?: string; details?: string }} [data]
+ * @property {{ errorCode?: string; ErrorCode?: string; traceId?: string; details?: string; fieldErrors?: Record<string, string[]>; FieldErrors?: Record<string, string[]> }} [data]
  * @property {Record<string, string[]>} [errors]
  * @property {string} [title]
  * @property {string} [error]
@@ -68,8 +68,10 @@ function extractErrorCode(body) {
  * @returns {Record<string, string[]> | undefined}
  */
 function extractFieldErrors(body) {
-  if (!body?.errors) return undefined;
-  return body.errors;
+  return body?.errors
+    ?? body?.data?.fieldErrors
+    ?? body?.data?.FieldErrors
+    ?? undefined;
 }
 
 /**

@@ -82,3 +82,4 @@ export async function reverseGeocodeHereLocation(
   url.searchParams.set("apiKey", apiKey);
   return mapSearchItems(await getJson(url, signal))[0] ?? null;
 }
+

@@ -4,6 +4,8 @@ import { packageService } from '@/application/features/packages/packageService';
 import { priceService, PublicPackagePricingOption } from '@/application/features/prices/priceService';
 import { SubscriptionPackage } from '@/shared/types';
 import { Check, Package, Store, Crown, Zap } from 'lucide-react';
+import { resolveMediaUrl } from '@/shared/utils';
+import { ImageWithFallback } from '@/presentation/components/ImageWithFallback';
 
 interface PackageDetailModalProps {
   packageId: string;
@@ -12,21 +14,21 @@ interface PackageDetailModalProps {
   onEdit: (pkg: SubscriptionPackage) => void;
 }
 
-const planIcons: Record<string, React.ElementType> = {
-  MARKET_BASIC: Store,
-  MARKET_PRO: Crown,
-  BOOTH_FREE: Package,
-  BOOTH_GROWTH: Zap,
-  BOOTH_FEATURED: Crown
+const planIcons: Record<string, React.ElementType> = { 
+  MARKET_BASIC: Store, 
+  MARKET_PRO: Crown, 
+  BOOTH_FREE: Package, 
+  BOOTH_GROWTH: Zap, 
+  BOOTH_FEATURED: Crown 
 };
 
 export function PackageDetailModal({ packageId, isOpen, onClose, onEdit }: PackageDetailModalProps) {
   const [packageLoading, setPackageLoading] = useState(false);
   const [packageError, setPackageError] = useState<string | null>(null);
-
+  
   const [pricingLoading, setPricingLoading] = useState(false);
   const [pricingError, setPricingError] = useState<string | null>(null);
-
+  
   const [pkg, setPkg] = useState<SubscriptionPackage | null>(null);
   const [prices, setPrices] = useState<PublicPackagePricingOption[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'features' | 'pricing'>('overview');
@@ -77,7 +79,7 @@ export function PackageDetailModal({ packageId, isOpen, onClose, onEdit }: Packa
 
   useEffect(() => {
     const controller = new AbortController();
-
+    
     if (isOpen && packageId) {
       void Promise.resolve().then(() => {
         setActiveTab('overview');
@@ -92,7 +94,7 @@ export function PackageDetailModal({ packageId, isOpen, onClose, onEdit }: Packa
         setPricingError(null);
       });
     }
-
+    
     return () => {
       controller.abort();
     };
@@ -102,10 +104,10 @@ export function PackageDetailModal({ packageId, isOpen, onClose, onEdit }: Packa
     if (!entitlementsJson) return <p className="text-sm text-gray-500">No limits specified.</p>;
     try {
       const parsed = JSON.parse(entitlementsJson);
-
+      
       const renderBoolean = (val: boolean | undefined) => val ? 'Included' : 'Not included';
       const renderNumber = (val: number | null | undefined) => val === null ? 'Unlimited' : (val === undefined ? 'Not specified' : val);
-
+      
       if (type === 1) { // Market
         return (
           <ul className="space-y-2 text-sm text-gray-700">
@@ -147,7 +149,7 @@ export function PackageDetailModal({ packageId, isOpen, onClose, onEdit }: Packa
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Package Details" size="xl">
       <div className="flex flex-col h-full max-h-[75vh]">
-
+        
         {packageLoading && (
           <div className="py-8 text-center text-gray-500 flex-1">Loading package details...</div>
         )}
@@ -166,9 +168,15 @@ export function PackageDetailModal({ packageId, isOpen, onClose, onEdit }: Packa
           <div className="flex flex-col flex-1 overflow-hidden">
             {/* Header */}
             <div className="px-6 py-4 border-b flex items-center gap-4 shrink-0">
-              <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center">
-                <Icon className="w-6 h-6 text-blue-600" />
-              </div>
+              {pkg.imageUrl ? (
+                <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+                  <ImageWithFallback src={resolveMediaUrl(pkg.imageUrl)} alt={pkg.packageName} className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center">
+                  <Icon className="w-6 h-6 text-blue-600" />
+                </div>
+              )}
               <div className="flex-1">
                 <h2 className="text-xl font-bold text-gray-900">{pkg.packageName}</h2>
                 <div className="flex items-center gap-2 mt-1 text-sm text-gray-500">
@@ -271,7 +279,7 @@ export function PackageDetailModal({ packageId, isOpen, onClose, onEdit }: Packa
               {activeTab === 'pricing' && (
                 <div className="space-y-4">
                   {pricingLoading && <div className="text-sm text-gray-500 text-center py-4">Loading pricing options...</div>}
-
+                  
                   {pricingError && !pricingLoading && (
                     <div className="bg-red-50 p-4 rounded-md border border-red-200 flex items-center justify-between">
                       <p className="text-red-700 text-sm">{pricingError}</p>
@@ -287,7 +295,7 @@ export function PackageDetailModal({ packageId, isOpen, onClose, onEdit }: Packa
                         let cycleName = 'Custom';
                         if (p.durationDays === 30) cycleName = 'Monthly';
                         else if (p.durationDays === 365) cycleName = 'Yearly';
-
+                        
                         return (
                           <div key={idx} className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col relative overflow-hidden">
                             {p.hasPromotion && (
@@ -296,7 +304,7 @@ export function PackageDetailModal({ packageId, isOpen, onClose, onEdit }: Packa
                               </div>
                             )}
                             <h4 className="text-base font-bold text-gray-900 mb-1">{cycleName} &middot; {p.durationDays} days</h4>
-
+                            
                             <div className="mt-3 flex flex-col gap-1 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-gray-500">Base price:</span>
@@ -311,7 +319,7 @@ export function PackageDetailModal({ packageId, isOpen, onClose, onEdit }: Packa
                                 </span>
                               </div>
                             </div>
-
+                            
                             <div className="mt-4 pt-3 border-t border-gray-100 text-xs text-gray-500 flex-1 flex items-end">
                               {p.hasPromotion && p.promotionEndDate ? (
                                 <span className="text-amber-600 font-medium">Promotion active until {new Date(p.promotionEndDate).toLocaleDateString()}</span>
@@ -324,7 +332,7 @@ export function PackageDetailModal({ packageId, isOpen, onClose, onEdit }: Packa
                       })}
                     </div>
                   )}
-
+                  
                   {!pricingLoading && !pricingError && prices.length === 0 && (
                     <div className="text-center py-8 bg-white rounded-xl border border-gray-200 shadow-sm">
                       <p className="text-gray-500 text-sm">No pricing options available.</p>
@@ -333,7 +341,7 @@ export function PackageDetailModal({ packageId, isOpen, onClose, onEdit }: Packa
                 </div>
               )}
             </div>
-
+            
             {/* Sticky Footer */}
             <div className="px-6 py-4 border-t bg-white flex justify-end gap-3 shrink-0">
               <button

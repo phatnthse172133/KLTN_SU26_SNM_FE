@@ -19,12 +19,12 @@ export const packageService = {
   getTemplates: async () => {
     return apiClient.get<BaseResponse<PackageTemplate[]>>(`/admin/packages/templates`);
   },
-  create: async (data: {
-    packageName: string;
-    templateCode: string;
-    price: number;
-    durationDays: number;
-    description?: string | null;
+  create: async (data: { 
+    packageName: string; 
+    templateCode: string; 
+    price: number; 
+    durationDays: number; 
+    description?: string | null; 
     status?: number;
     promotion?: {
       price: number;
@@ -34,11 +34,11 @@ export const packageService = {
   }) => {
     return apiClient.post<BaseResponse<SubscriptionPackage>>("/admin/packages", data);
   },
-  update: async (packageId: string, data: {
-    packageName: string;
-    price: number;
-    durationDays: number;
-    description?: string | null;
+  update: async (packageId: string, data: { 
+    packageName: string; 
+    price: number; 
+    durationDays: number; 
+    description?: string | null; 
     status?: number;
     promotionAction?: "Keep" | "Upsert" | "Remove";
     promotion?: {
@@ -60,15 +60,21 @@ export const packageService = {
     return apiClient.get<BaseResponse<PackagePolicy>>(`/packages/${packageId}/policy`);
   },
   createPolicy: async (packageId: string, data: {
-    version: string;
     title: string;
-    contentJson: string;
-    contentMarkdown?: string | null;
-    effectiveFrom?: string | null;
+    terms: string[];
+    effectiveFrom: string;
   }) => {
     return apiClient.post<BaseResponse<PackagePolicy>>(`/admin/packages/${packageId}/policies`, data);
   },
   activatePolicy: async (packageId: string, policyId: string) => {
     return apiClient.put<BaseResponse<PackagePolicy>>(`/admin/packages/${packageId}/policies/${policyId}/activate`, {});
+  },
+  uploadImage: async (packageId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post<BaseResponse<SubscriptionPackage>>(`/admin/packages/${packageId}/image`, formData);
+  },
+  deleteImage: async (packageId: string) => {
+    return apiClient.delete<BaseResponse<object>>(`/admin/packages/${packageId}/image`);
   },
 };

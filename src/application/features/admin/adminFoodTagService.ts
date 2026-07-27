@@ -89,7 +89,7 @@ export const adminFoodTagService = {
     if (params.limit) qp.append('PageSize', params.limit.toString());
     if (params.search) qp.append('Search', params.search);
     if (params.tagGroup !== undefined) qp.append('TagGroup', params.tagGroup.toString());
-
+    
     const response = await apiClient.get<BaseResponse<PaginationResponse<FoodTagApiResponse>>>(`/admin/food-tags?${qp.toString()}`);
     return {
       ...response.data,

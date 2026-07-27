@@ -2,9 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Search, Bell, RefreshCw, X, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { adminNotificationService, AdminNotificationListItemResponse, AdminCreateNotificationRequest, AdminNotificationDetailResponse } from '@/application/features/notifications/adminNotificationService';
 import { accountService } from '@/application/features/account/accountService';
-
-const getErrorMessage = (error: unknown, fallback: string) =>
-  error instanceof Error && error.message ? error.message : fallback;
+import { getErrorMessage } from '@/shared/errors/errorMapper';
 
 const TARGET_OPTIONS = [
   { value: 'AllUsers', label: 'All Users' },
@@ -22,7 +20,7 @@ export function NotificationsManagement() {
   const [items, setItems] = useState<AdminNotificationListItemResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
-
+  
   // Pagination
   const [page, setPage] = useState(1);
   const pageSize = 10;
@@ -40,7 +38,7 @@ export function NotificationsManagement() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
+  
   // Confirmation state
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -113,7 +111,7 @@ export function NotificationsManagement() {
       setTotalItems(res.total);
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
-      setListError(getErrorMessage(err, 'We couldn\'t load notifications. Please try again.'));
+      setListError(getErrorMessage(err));
     } finally {
       if (abortControllerRef.current === controller) {
         setLoading(false);
@@ -149,7 +147,7 @@ export function NotificationsManagement() {
         setUserSearchResults(res.data.items.map(u => ({ id: u.id, name: u.fullName, email: u.email })));
       } catch (err: unknown) {
         setUserSearchResults([]);
-        setUserSearchError(getErrorMessage(err, 'We couldn\'t search users. Please try again.'));
+        setUserSearchError(getErrorMessage(err));
       } finally {
         setIsSearchingUsers(false);
       }
@@ -187,7 +185,7 @@ export function NotificationsManagement() {
       loadData();
       showToast('Notification sent successfully.', 'success');
     } catch (err: unknown) {
-      const msg = getErrorMessage(err, 'We couldn\'t send the notification. Please try again.');
+      const msg = getErrorMessage(err);
       setFormError(msg);
       showToast(msg, 'error');
     } finally {
@@ -203,7 +201,7 @@ export function NotificationsManagement() {
       const data = await adminNotificationService.getAdminNotificationDetail(batchId);
       setDetailData(data);
     } catch (err: unknown) {
-      setDetailError(getErrorMessage(err, 'We couldn\'t load notification details. Please try again.'));
+      setDetailError(getErrorMessage(err));
     } finally {
       setDetailLoading(false);
     }
@@ -257,7 +255,7 @@ export function NotificationsManagement() {
                 />
               </div>
             </div>
-
+            
             <div className="w-32">
               <label className="block text-sm font-medium text-gray-700 mb-1">Target</label>
               <select
@@ -407,7 +405,7 @@ export function NotificationsManagement() {
               </tbody>
             </table>
           </div>
-
+          
           {!loading && items.length > 0 && (
             <div className="px-6 py-4 border-t border-gray-200 bg-gray-50/50 flex items-center justify-between">
               <span className="text-sm text-gray-500">
@@ -440,7 +438,7 @@ export function NotificationsManagement() {
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
               <h2 className="text-lg font-bold text-gray-900">Send Notification</h2>
-              <button
+              <button 
                 onClick={() => {
                   setIsCreateModalOpen(false);
                   setShowConfirm(false);
@@ -450,7 +448,7 @@ export function NotificationsManagement() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-
+            
             <form onSubmit={initiateSubmit} className="flex-1 overflow-auto p-6">
               {formError && (
                 <div className="mb-6 p-4 rounded-lg bg-red-50 text-red-600 text-sm border border-red-100">
@@ -467,7 +465,7 @@ export function NotificationsManagement() {
                   <p className="text-sm text-gray-600">
                     Are you sure you want to send this notification to{' '}
                     <span className="font-semibold text-gray-900">
-                      {formData.target === 'AllUsers' ? 'all users' :
+                      {formData.target === 'AllUsers' ? 'all users' : 
                        formData.target === 'Role' ? `all active ${formData.role}s` :
                        selectedUser ? selectedUser.name : 'the selected user'}
                     </span>?
@@ -560,8 +558,8 @@ export function NotificationsManagement() {
                           {userSearchError && (
                             <div className="absolute top-full left-0 right-0 mt-1 bg-red-50 border border-red-200 rounded-lg shadow-lg z-10 p-3 text-sm text-red-600 flex justify-between items-center">
                               <span>{userSearchError}</span>
-                              <button
-                                type="button"
+                              <button 
+                                type="button" 
                                 onClick={() => setUserSearchRetryKey(prev => prev + 1)}
                                 className="px-2 py-1 bg-red-100 rounded hover:bg-red-200 font-medium"
                               >
@@ -601,7 +599,7 @@ export function NotificationsManagement() {
                   </div>
                 </div>
               )}
-
+              
               <div className="mt-8 flex items-center justify-end gap-3 pt-6 border-t border-gray-100">
                 <button
                   type="button"
@@ -647,7 +645,7 @@ export function NotificationsManagement() {
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
               <h2 className="text-lg font-bold text-gray-900">Notification Details</h2>
-              <button
+              <button 
                 onClick={closeDetail}
                 className="text-gray-400 hover:text-gray-600 transition-colors p-1"
               >
@@ -726,7 +724,7 @@ export function NotificationsManagement() {
           </div>
         </div>
       )}
-
+      
       {toast && (
         <div className={`fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg z-[100] text-white font-medium transition-all ${
           toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'

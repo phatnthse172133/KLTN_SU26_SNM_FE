@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import {
-  Plus, Search, Edit2, Trash2, Tag, BookOpen, Clock,
+import { 
+  Plus, Search, Edit2, Trash2, Tag, BookOpen, Clock, 
   Coffee, Utensils, UtensilsCrossed, Leaf
 } from 'lucide-react';
 import { Modal } from './components/Modal';
@@ -10,11 +10,11 @@ import { Pagination } from './components/Pagination';
 import { useToast } from '@/presentation/components/shared/ToastContext';
 import { ConfirmDialog } from '@/presentation/components/shared/ConfirmDialog';
 import { getErrorMessage } from '@/shared/errors/errorMapper';
-import {
-  adminFoodTagService,
-  FoodTag,
-  FoodTagGroup,
-  FoodTagStatus
+import { 
+  adminFoodTagService, 
+  FoodTag, 
+  FoodTagGroup, 
+  FoodTagStatus 
 } from '@/application/features/admin/adminFoodTagService';
 
 const cardStyle: React.CSSProperties = {
@@ -150,7 +150,7 @@ export default function FoodTags() {
           status: formData.status
         });
       }
-
+      
       showToast('success', editingTag ? 'The food tag has been updated successfully.' : 'The food tag has been created successfully.');
       setIsModalOpen(false);
       await fetchTags();
@@ -232,8 +232,8 @@ export default function FoodTags() {
                 key={tab}
                 onClick={() => { setSelectedGroup(tab); setPage(1); }}
                 className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
-                  selectedGroup === tab
-                    ? 'bg-blue-600 text-white shadow-sm'
+                  selectedGroup === tab 
+                    ? 'bg-blue-600 text-white shadow-sm' 
                     : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                 }`}
               >
@@ -302,7 +302,7 @@ export default function FoodTags() {
                     </td>
                     <td style={tdStyle}>
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border
-                        ${tag.status === FoodTagStatus.Active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                        ${tag.status === FoodTagStatus.Active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
                           tag.status === FoodTagStatus.Draft ? 'bg-amber-50 text-amber-700 border-amber-200' :
                           'bg-slate-50 text-slate-700 border-slate-200'}
                       `}>
@@ -311,7 +311,7 @@ export default function FoodTags() {
                     </td>
                     <td style={tdStyle} className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button
+                        <button 
                           type="button"
                           onClick={() => openModal(tag)}
                           className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
@@ -319,7 +319,7 @@ export default function FoodTags() {
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        <button
+                        <button 
                           type="button"
                           onClick={() => setDeleteTarget(tag)}
                           className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
@@ -362,7 +362,7 @@ export default function FoodTags() {
               {formError}
             </div>
           )}
-
+          
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Name *</label>
             <input

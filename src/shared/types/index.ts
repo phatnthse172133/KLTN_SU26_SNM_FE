@@ -31,6 +31,8 @@ export interface UserProfile {
   createdAt?: string;
 }
 
+export type BoothStatus = 'Active' | 'Inactive' | 'Banned';
+
 export interface Booth {
   id: string;
   nightMarketId: string;
@@ -45,6 +47,7 @@ export interface Booth {
   phoneNumber?: string | null;
   slotNumber?: string | null;
   thumbnailUrl?: string | null;
+  logoUrl?: string | null;
   paymentQrImage?: string | null;
   mapPositionX?: number | null;
   mapPositionY?: number | null;
@@ -52,7 +55,8 @@ export interface Booth {
   closeTime?: string | null;
   averageRating?: number | null;
   isFeatured: boolean;
-  status: string;
+  status: BoothStatus;
+  banReason?: string | null;
 }
 
 export interface NightMarket {
@@ -96,6 +100,7 @@ export interface SubscriptionPackage {
   type: number;
   description?: string | null;
   entitlements?: string | null;
+  imageUrl?: string | null;
   features: string[];
   status: string;
   createdAt: string;
@@ -106,9 +111,9 @@ export interface PackagePolicy {
   id: string;
   packageId: string;
   version: string;
+  displayVersion: string;
   title: string;
-  contentJson: string;
-  contentMarkdown?: string | null;
+  terms: string[];
   effectiveFrom: string;
   isActive: boolean;
   createdAt: string;

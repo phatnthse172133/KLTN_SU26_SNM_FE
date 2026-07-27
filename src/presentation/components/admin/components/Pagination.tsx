@@ -45,7 +45,7 @@ export function Pagination({ currentPage, totalPages, onPageChange, totalItems, 
     >
       <p style={{ fontSize: '0.8125rem', color: '#64748B' }}>
         Showing{' '}
-        <span style={{ color: '#111827', fontWeight: 600 }}>{startItem}â€“{endItem}</span>
+        <span style={{ color: '#111827', fontWeight: 600 }}>{startItem}-{endItem}</span>
         {' '}of{' '}
         <span style={{ color: '#111827', fontWeight: 600 }}>{totalItems}</span>
       </p>

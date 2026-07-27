@@ -2,7 +2,7 @@
 
 import type { ElementType, MouseEvent } from 'react';
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Check, Store, Crown, Zap, Package, TrendingUp, Plus, Edit2, Trash2, ChevronRight, Shield } from 'lucide-react';
+import { Check, Store, Crown, Zap, Package, TrendingUp, Plus, Edit2, Trash2, ChevronRight, Shield, Upload, X } from 'lucide-react';
 import { packageService, PackageTemplate } from '@/application/features/packages/packageService';
 import { priceService, PriceResponse } from '@/application/features/prices/priceService';
 import type { SubscriptionPackage } from '@/shared/types';
@@ -11,13 +11,15 @@ import { PackageDetailModal } from './components/PackageDetailModal';
 import { PackagePolicyModal } from './components/PackagePolicyModal';
 import { useToast } from '@/presentation/components/shared/ToastContext';
 import { getErrorMessage } from '@/shared/errors/errorMapper';
+import { resolveMediaUrl } from '@/shared/utils';
+import { ImageWithFallback } from '@/presentation/components/ImageWithFallback';
 
-const planIcons: Record<string, ElementType> = {
-  MARKET_BASIC: Store,
-  MARKET_PRO: Crown,
-  BOOTH_FREE: Package,
-  BOOTH_GROWTH: Zap,
-  BOOTH_FEATURED: Crown
+const planIcons: Record<string, ElementType> = { 
+  MARKET_BASIC: Store, 
+  MARKET_PRO: Crown, 
+  BOOTH_FREE: Package, 
+  BOOTH_GROWTH: Zap, 
+  BOOTH_FEATURED: Crown 
 };
 
 const planGradients: Record<string, { border: string; icon: string; price: string; check: string }> = {
@@ -61,6 +63,19 @@ const planGradients: Record<string, { border: string; icon: string; price: strin
 
 function formatPrice(p: number) {
   return p.toLocaleString('en-US') + ' VND';
+}
+
+const IMAGE_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const IMAGE_MAX_SIZE = 5 * 1024 * 1024;
+
+function validateImageFile(file: File): string | null {
+  if (!IMAGE_ALLOWED_TYPES.includes(file.type)) {
+    return 'Only JPG, PNG, or WEBP images are allowed.';
+  }
+  if (file.size > IMAGE_MAX_SIZE) {
+    return 'The image must be 5MB or smaller.';
+  }
+  return null;
 }
 
 function getStatusPill(status: string) {
@@ -146,14 +161,17 @@ export function SubscriptionsManagement() {
 
   const [editPackage, setEditPackage] = useState<PackageWithPromo | null>(null);
   const [editForm, setEditForm] = useState<PlanForm>({ ...emptyPlanForm });
-
+  const [imageUploading, setImageUploading] = useState(false);
+  
   const [showAddPlan, setShowAddPlan] = useState(false);
   const [addContext, setAddContext] = useState<number | null>(null); // 0 = Booth, 1 = Market
   const [planForm, setPlanForm] = useState<PlanForm>({ ...emptyPlanForm });
-
+  const [addImageFile, setAddImageFile] = useState<File | null>(null);
+  const [addImagePreview, setAddImagePreview] = useState<string | null>(null);
+  
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<PackageWithPromo | null>(null);
-
+  
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [policyTarget, setPolicyTarget] = useState<PackageWithPromo | null>(null);
 
@@ -245,9 +263,36 @@ export function SubscriptionsManagement() {
     });
   }, [packages]);
 
+  const clearAddImage = useCallback(() => {
+    setAddImagePreview(prev => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setAddImageFile(null);
+  }, []);
+
+  const handleAddImageSelect = (file: File) => {
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      showToast('error', validationError);
+      return;
+    }
+    setAddImagePreview(prev => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+    setAddImageFile(file);
+  };
+
+  const closeAddPlan = () => {
+    setShowAddPlan(false);
+    clearAddImage();
+  };
+
   const openAddPlan = (type?: number) => {
     setAddContext(type ?? null);
     setPlanForm({ ...emptyPlanForm });
+    clearAddImage();
     setShowAddPlan(true);
   };
 
@@ -340,11 +385,32 @@ export function SubscriptionsManagement() {
         };
       }
 
-      await packageService.create(createPayload);
+      const createRes = await packageService.create(createPayload);
+      const imageFile = addImageFile;
+      const newPackageId = createRes.success ? createRes.data?.id : undefined;
 
-      showToast('success', 'The package has been created successfully.');
+      let imageUploaded = true;
+      if (imageFile) {
+        if (newPackageId) {
+          try {
+            await packageService.uploadImage(newPackageId, imageFile);
+          } catch (uploadError) {
+            console.error('Failed to upload package image:', uploadError);
+            imageUploaded = false;
+          }
+        } else {
+          imageUploaded = false;
+        }
+      }
+
+      if (imageUploaded) {
+        showToast('success', 'The package has been created successfully.');
+      } else {
+        showToast('warning', 'Package created, but the image could not be uploaded. You can retry from Edit Package.');
+      }
       setShowAddPlan(false);
       setPlanForm({ ...emptyPlanForm });
+      clearAddImage();
       await fetchPackages();
     } catch (error) {
       console.error('Failed to create package:', error);
@@ -367,6 +433,55 @@ export function SubscriptionsManagement() {
       showToast('error', getErrorMessage(error));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleImageUpload = async (file: File) => {
+    if (!editPackage) return;
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      showToast('error', validationError);
+      return;
+    }
+    setImageUploading(true);
+    try {
+      await packageService.uploadImage(editPackage.id, file);
+      showToast('success', 'Package image uploaded successfully.');
+      await fetchPackages();
+      const updated = packages.find(p => p.id === editPackage.id);
+      if (updated) {
+        const refreshed = await packageService.getById(editPackage.id);
+        if (refreshed.success && refreshed.data) {
+          setEditPackage({ ...updated, ...refreshed.data, promo: updated.promo });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to upload image:', error);
+      showToast('error', getErrorMessage(error));
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
+  const handleDeleteImage = async () => {
+    if (!editPackage) return;
+    setImageUploading(true);
+    try {
+      await packageService.deleteImage(editPackage.id);
+      showToast('success', 'Package image removed successfully.');
+      await fetchPackages();
+      const updated = packages.find(p => p.id === editPackage.id);
+      if (updated) {
+        const refreshed = await packageService.getById(editPackage.id);
+        if (refreshed.success && refreshed.data) {
+          setEditPackage({ ...updated, ...refreshed.data, imageUrl: null, promo: updated.promo });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to delete image:', error);
+      showToast('error', getErrorMessage(error));
+    } finally {
+      setImageUploading(false);
     }
   };
 
@@ -425,8 +540,8 @@ export function SubscriptionsManagement() {
     const hasPromo = !!pkg.promo;
 
     return (
-      <div
-        key={pkg.id}
+      <div 
+        key={pkg.id} 
         onClick={() => setSelectedPackageId(pkg.id)}
         role="button"
         tabIndex={0}
@@ -435,6 +550,12 @@ export function SubscriptionsManagement() {
       >
         <div style={{ height: '4px', background: grad.border }} />
 
+        {pkg.imageUrl ? (
+          <div className="relative w-full h-32 overflow-hidden bg-gray-100">
+            <ImageWithFallback src={resolveMediaUrl(pkg.imageUrl)} alt={pkg.packageName} className="w-full h-full object-cover" />
+          </div>
+        ) : null}
+
         {hasPromo && (
           <div className="absolute top-4 right-4 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-md z-10">
             PROMOTION ACTIVE
@@ -442,9 +563,11 @@ export function SubscriptionsManagement() {
         )}
 
         <div className="p-5 flex-1 flex flex-col">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4" style={{ background: grad.icon }}>
-            <Icon className="w-5 h-5 text-white" />
-          </div>
+          {!pkg.imageUrl && (
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4" style={{ background: grad.icon }}>
+              <Icon className="w-5 h-5 text-white" />
+            </div>
+          )}
 
           <div className="flex items-start justify-between mb-2">
             <div>
@@ -565,7 +688,7 @@ export function SubscriptionsManagement() {
             <p className="text-sm text-gray-500">Plans for Market Owners to create and manage night markets.</p>
           </div>
         </div>
-
+        
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="h-48 bg-gray-100 animate-pulse rounded-2xl"></div>
@@ -574,7 +697,7 @@ export function SubscriptionsManagement() {
         ) : marketPackages.length === 0 && !error ? (
           <div className="text-center py-10 bg-gray-50 rounded-xl border border-gray-200 border-dashed">
             <p className="text-gray-500 text-sm mb-4">No Market packages are available yet.</p>
-            <button
+            <button 
               onClick={() => openAddPlan(1)}
               className="px-4 py-2 bg-white border border-gray-300 text-gray-700 font-medium text-sm rounded-md hover:bg-gray-50"
             >
@@ -596,7 +719,7 @@ export function SubscriptionsManagement() {
             <p className="text-sm text-gray-500">Plans for Booth Owners to operate and promote their booths.</p>
           </div>
         </div>
-
+        
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div className="h-48 bg-gray-100 animate-pulse rounded-2xl"></div>
@@ -606,7 +729,7 @@ export function SubscriptionsManagement() {
         ) : boothPackages.length === 0 && !error ? (
           <div className="text-center py-10 bg-gray-50 rounded-xl border border-gray-200 border-dashed">
             <p className="text-gray-500 text-sm mb-4">No Booth packages are available yet.</p>
-            <button
+            <button 
               onClick={() => openAddPlan(0)}
               className="px-4 py-2 bg-white border border-gray-300 text-gray-700 font-medium text-sm rounded-md hover:bg-gray-50"
             >
@@ -622,10 +745,10 @@ export function SubscriptionsManagement() {
 
 
       {/* Detail Modal */}
-      <PackageDetailModal
-        packageId={selectedPackageId!}
-        isOpen={!!selectedPackageId}
-        onClose={() => setSelectedPackageId(null)}
+      <PackageDetailModal 
+        packageId={selectedPackageId!} 
+        isOpen={!!selectedPackageId} 
+        onClose={() => setSelectedPackageId(null)} 
         onEdit={(pkg) => {
           // Re-find package in local state to pass promo correctly if needed
           const localPkg = packages.find(p => p.id === pkg.id);
@@ -643,7 +766,7 @@ export function SubscriptionsManagement() {
               promoEndDate: localPkg.promo?.endDate?.split('T')[0] || '',
             });
           }
-        }}
+        }} 
       />
 
       {/* Edit Package Modal */}
@@ -703,6 +826,65 @@ export function SubscriptionsManagement() {
             </div>
 
             <div>
+              <label style={labelStyle}>Package Image</label>
+              {editPackage.imageUrl ? (
+                <div style={{ position: 'relative', borderRadius: '0.5rem', overflow: 'hidden', border: '1px solid #E5E7EB' }}>
+                  <ImageWithFallback src={resolveMediaUrl(editPackage.imageUrl)} alt={editPackage.packageName} style={{ width: '100%', height: '160px', objectFit: 'cover' }} />
+                  <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', display: 'flex', gap: '0.375rem' }}>
+                    <label
+                      style={{ background: 'rgba(0,0,0,0.6)', color: 'white', borderRadius: '0.375rem', padding: '0.25rem 0.5rem', cursor: imageUploading ? 'not-allowed' : 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                    >
+                      <Upload className="w-3 h-3" /> Replace
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        style={{ display: 'none' }}
+                        disabled={imageUploading}
+                        onChange={e => {
+                          const file = e.target.files?.[0];
+                          if (file) void handleImageUpload(file);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleDeleteImage}
+                      disabled={imageUploading}
+                      style={{ background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none', borderRadius: '0.375rem', padding: '0.25rem 0.5rem', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                    >
+                      <X className="w-3 h-3" /> Remove
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <label
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '1.5rem', border: '2px dashed #E5E7EB', borderRadius: '0.5rem', cursor: 'pointer', background: '#F8FAFC', color: '#64748B', fontSize: '0.8125rem', textAlign: 'center', transition: 'border-color 0.2s' }}
+                >
+                  {imageUploading ? (
+                    <div className="animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent" />
+                  ) : (
+                    <>
+                      <Upload className="w-5 h-5" />
+                      <span>Click to upload an image (JPG, PNG, WEBP - max 5MB)</span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    style={{ display: 'none' }}
+                    disabled={imageUploading}
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (file) void handleImageUpload(file);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+
+            <div>
               <label style={labelStyle}>Description (short summary)</label>
               <textarea
                 value={editForm.description}
@@ -754,7 +936,7 @@ export function SubscriptionsManagement() {
       </Modal>
 
       {/* Add New Plan Modal */}
-      <Modal isOpen={showAddPlan} onClose={() => setShowAddPlan(false)} title="Add New Subscription Plan" size="md">
+      <Modal isOpen={showAddPlan} onClose={closeAddPlan} title="Add New Subscription Plan" size="md">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
             <label style={labelStyle}>Package Name <span style={{ color: '#F87171' }}>*</span></label>
@@ -837,6 +1019,57 @@ export function SubscriptionsManagement() {
           </div>
 
           <div>
+            <label style={labelStyle}>Package Image</label>
+            {addImagePreview ? (
+              <div style={{ position: 'relative', borderRadius: '0.5rem', overflow: 'hidden', border: '1px solid #E5E7EB' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={addImagePreview} alt="Package preview" style={{ width: '100%', height: '160px', objectFit: 'cover' }} />
+                <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', display: 'flex', gap: '0.375rem' }}>
+                  <label
+                    style={{ background: 'rgba(0,0,0,0.6)', color: 'white', borderRadius: '0.375rem', padding: '0.25rem 0.5rem', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                  >
+                    <Upload className="w-3 h-3" /> Replace
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      style={{ display: 'none' }}
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) handleAddImageSelect(file);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={clearAddImage}
+                    style={{ background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none', borderRadius: '0.375rem', padding: '0.25rem 0.5rem', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                  >
+                    <X className="w-3 h-3" /> Remove
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <label
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '1.5rem', border: '2px dashed #E5E7EB', borderRadius: '0.5rem', cursor: 'pointer', background: '#F8FAFC', color: '#64748B', fontSize: '0.8125rem', textAlign: 'center', transition: 'border-color 0.2s' }}
+              >
+                <Upload className="w-5 h-5" />
+                <span>Click to upload an image (JPG, PNG, WEBP - max 5MB)</span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  style={{ display: 'none' }}
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (file) handleAddImageSelect(file);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            )}
+          </div>
+
+          <div>
             <label style={labelStyle}>Description (short summary)</label>
             <textarea
               rows={2}
@@ -858,7 +1091,7 @@ export function SubscriptionsManagement() {
               {saving ? 'Creating...' : 'Create Plan'}
             </button>
             <button
-              onClick={() => setShowAddPlan(false)}
+              onClick={closeAddPlan}
               style={{ padding: '0.625rem 1rem', background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '0.5rem', fontWeight: 500, color: '#111827', cursor: 'pointer', fontSize: '0.875rem' }}
             >
               Cancel

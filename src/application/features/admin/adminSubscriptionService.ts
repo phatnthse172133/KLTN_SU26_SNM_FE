@@ -39,6 +39,20 @@ export interface VerifySubscriptionRequest {
     adminNotes: string | null;
 }
 
+const subscriptionStatusByCode: Record<number, SubscriptionStatus> = {
+    0: SubscriptionStatus.PendingPayment,
+    1: SubscriptionStatus.Active,
+    2: SubscriptionStatus.Expired,
+    3: SubscriptionStatus.Cancelled,
+};
+
+const normalizeSubscriptionStatus = (status: SubscriptionStatus | number): SubscriptionStatus => {
+    if (typeof status === 'number') {
+        return subscriptionStatusByCode[status] ?? (String(status) as SubscriptionStatus);
+    }
+    return status;
+};
+
 export const adminSubscriptionService = {
     getSubscriptions: async (
         type?: PackageType,
@@ -60,6 +74,12 @@ export const adminSubscriptionService = {
         }
 
         const response = await apiClient.get<PaginationResponse<AdminSubscriptionDto>>(`/admin/subscriptions?${params.toString()}`);
-        return response;
+        return {
+            ...response,
+            items: (response.items || []).map((item) => ({
+                ...item,
+                status: normalizeSubscriptionStatus(item.status),
+            })),
+        };
     }
 };

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { adminModerationService } from '@/application/features/admin/adminModerationService';
 import { adminBoothService, NightMarketOption } from '@/application/features/admin/adminBoothService';
-import type { MarketModerationOverview, BoothModerationOverview, BoothModerationStatus } from '@/application/features/admin/adminModerationService';
+import type { MarketModerationOverview, BoothModerationOverview, BoothModerationStatus, MarketModerationStatus } from '@/application/features/admin/adminModerationService';
 import { getErrorMessage } from '@/shared/errors/errorMapper';
 import { MarketModerationGrid } from './components/MarketModerationGrid';
 import { BoothModerationTable } from './components/BoothModerationTable';
@@ -18,6 +18,7 @@ interface ModerationManagementProps {
 }
 
 export type ModerationItem = MarketModerationOverview | BoothModerationOverview;
+export type ModerationTargetStatus = BoothModerationStatus | MarketModerationStatus;
 
 export function ModerationManagement({ targetType }: ModerationManagementProps) {
   // Data State
@@ -43,7 +44,7 @@ export function ModerationManagement({ targetType }: ModerationManagementProps) 
   const [selectedItem, setSelectedItem] = useState<{
     id: string;
     name: string;
-    status: BoothModerationStatus;
+    status: ModerationTargetStatus;
   } | null>(null);
 
   useEffect(() => {
@@ -132,14 +133,19 @@ export function ModerationManagement({ targetType }: ModerationManagementProps) 
     return () => { ignore = true; };
   }, [targetType, page, debouncedSearch, statusFilter, lifecycleFilter, nightMarketFilter, reloadKey]);
 
-  const handleAction = async (req: { status: 'Active' | 'Suspended'; reason: string }) => {
+  const handleAction = async (req: { action: 'sanction' | 'restore'; reason: string }) => {
     if (!selectedItem) return;
     try {
       if (targetType === 'NightMarket') {
-        const res = await adminModerationService.changeMarketModerationStatus(selectedItem.id, req);
+        const res = await adminModerationService.changeMarketModerationStatus(selectedItem.id, {
+          status: req.action === 'sanction' ? 'Suspended' : 'Active',
+          reason: req.reason
+        });
         if (!res.success) throw new Error('The night market status could not be updated.');
       } else {
-        const res = await adminModerationService.changeBoothStatus(selectedItem.id, req);
+        const res = req.action === 'sanction'
+          ? await adminModerationService.banBooth(selectedItem.id, { reason: req.reason })
+          : await adminModerationService.restoreBooth(selectedItem.id, { reason: req.reason });
         if (!res.success) throw new Error('The booth status could not be updated.');
       }
       setSanctionModalOpen(false);
@@ -151,12 +157,12 @@ export function ModerationManagement({ targetType }: ModerationManagementProps) 
     }
   };
 
-  const openDetail = useCallback((id: string, name: string, status: BoothModerationStatus) => {
+  const openDetail = useCallback((id: string, name: string, status: ModerationTargetStatus) => {
     setSelectedItem({ id, name, status });
     setDetailModalOpen(true);
   }, []);
 
-  const openSanction = useCallback((id: string, name: string, status: BoothModerationStatus) => {
+  const openSanction = useCallback((id: string, name: string, status: ModerationTargetStatus) => {
     setSelectedItem({ id, name, status });
     setSanctionModalOpen(true);
   }, []);
@@ -229,7 +235,7 @@ export function ModerationManagement({ targetType }: ModerationManagementProps) 
         />
       )}
 
-      {sanctionModalOpen && selectedItem && (selectedItem.status === 'Active' || selectedItem.status === 'Suspended') && (
+      {sanctionModalOpen && selectedItem && (
         <SanctionModal
           isOpen={sanctionModalOpen}
           onClose={() => setSanctionModalOpen(false)}

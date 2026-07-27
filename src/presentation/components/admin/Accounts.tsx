@@ -440,9 +440,9 @@ export function Accounts({ initialUserId }: AccountsProps) {
                       
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                         {[
-                          { doc: booth.documents?.businessLicense, label: 'Business License', images: ['https://images.unsplash.com/photo-1457369804613-52c61a468e7d?w=400'] },
-                          { doc: booth.documents?.foodSafety, label: 'Food Safety Certificate', images: ['https://images.unsplash.com/photo-1554774853-aae0a22c8aa4?w=400', 'https://images.unsplash.com/photo-1506157786151-b8491531f063?w=400'] },
-                          { doc: booth.documents?.healthPermit, label: 'Health Permit', images: ['https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400'] },
+                          { doc: booth.documents?.businessLicense, label: 'Business License', images: [] },
+                          { doc: booth.documents?.foodSafety, label: 'Food Safety Certificate', images: [] },
+                          { doc: booth.documents?.healthPermit, label: 'Health Permit', images: [] },
                         ].filter(({ doc }) => doc).map(({ doc, label, images }) => doc && (
                           <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>

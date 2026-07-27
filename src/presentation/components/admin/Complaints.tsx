@@ -39,7 +39,7 @@ const statusPillStyle: Record<string, React.CSSProperties> = {
 const resolutionActionLabels: Record<string, string> = {
   'NoViolation': 'Resolved without penalty',
   'Warning': 'Warning issued',
-  'SuspendBooth': 'Booth suspended',
+  'SuspendBooth': 'Booth banned',
   'CloseBooth': 'Booth closed',
 };
 
@@ -558,7 +558,7 @@ export function Complaints({ initialComplaintId }: ComplaintsProps = {}) {
                   >
                     <option value={ComplaintResolutionAction.NoViolation}>Resolved without penalty</option>
                     <option value={ComplaintResolutionAction.Warning}>Warning</option>
-                    <option value={ComplaintResolutionAction.SuspendBooth}>Suspend Booth</option>
+                    <option value={ComplaintResolutionAction.SuspendBooth}>Ban Booth</option>
                   </select>
                   {needsPolicyViolation && (
                     <textarea
@@ -573,10 +573,10 @@ export function Complaints({ initialComplaintId }: ComplaintsProps = {}) {
                       <div className="flex items-start gap-2">
                         <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#F87171' }} />
                         <div>
-                          <p className="text-sm font-medium" style={{ color: '#F87171' }}>This will suspend the booth. The booth owner will be notified.</p>
+                          <p className="text-sm font-medium" style={{ color: '#F87171' }}>This will ban the booth. The booth owner will be notified.</p>
                           <label className="flex items-center gap-2 mt-2" style={{ cursor: submitting ? 'default' : 'pointer' }}>
                             <input type="checkbox" checked={suspendConfirm} onChange={e => setSuspendConfirm(e.target.checked)} disabled={submitting} />
-                            <span className="text-sm" style={{ color: '#DC2626' }}>I confirm this booth should be suspended</span>
+                            <span className="text-sm" style={{ color: '#DC2626' }}>I confirm this booth should be banned</span>
                           </label>
                         </div>
                       </div>
