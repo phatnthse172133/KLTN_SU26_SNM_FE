@@ -11,8 +11,8 @@ interface SanctionModalProps {
   targetId: string;
   targetName: string;
   targetType: 'Night Market' | 'Booth';
-  currentStatus: 'Active' | 'Suspended';
-  onSubmit: (request: { status: 'Active' | 'Suspended', reason: string }) => Promise<void>;
+  currentStatus: 'Active' | 'Inactive' | 'Suspended' | 'Banned';
+  onSubmit: (request: { action: 'sanction' | 'restore', reason: string }) => Promise<void>;
 }
 
 export function SanctionModal({ isOpen, onClose, targetName, targetType, currentStatus, onSubmit }: SanctionModalProps) {
@@ -22,8 +22,13 @@ export function SanctionModal({ isOpen, onClose, targetName, targetType, current
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const isSuspending = currentStatus === 'Active';
-  const newStatus = isSuspending ? 'Suspended' : 'Active';
+  const isBooth = targetType === 'Booth';
+  const isSanctioning = isBooth ? currentStatus !== 'Banned' : currentStatus === 'Active';
+  const sanctionVerb = isBooth ? 'ban' : 'suspend';
+  const sanctionPastVerb = isBooth ? 'banned' : 'suspended';
+  const sanctionNoun = isBooth ? 'ban' : 'suspension';
+  const sanctionTitle = isBooth ? 'Ban Booth' : `Suspend ${targetType}`;
+  const restoreTitle = isBooth ? 'Restore Booth' : `Restore ${targetType}`;
 
 
 
@@ -43,7 +48,7 @@ export function SanctionModal({ isOpen, onClose, targetName, targetType, current
       setError('Reason must be between 10 and 1000 characters.');
       return;
     }
-    if (isSuspending && !isConfirmed) {
+    if (isSanctioning && !isConfirmed) {
       setError('You must confirm this action.');
       return;
     }
@@ -51,12 +56,12 @@ export function SanctionModal({ isOpen, onClose, targetName, targetType, current
     try {
       setIsLoading(true);
       setError('');
-      await onSubmit({ status: newStatus, reason });
-      showToast('success', `${targetType} ${newStatus.toLowerCase()} successfully.`);
+      await onSubmit({ action: isSanctioning ? 'sanction' : 'restore', reason });
+      showToast('success', `${targetType} ${isSanctioning ? sanctionPastVerb : 'restored'} successfully.`);
     } catch (err: unknown) {
       const msg = getErrorMessage(err);
       setError(msg);
-      showToast('error', `Failed to ${isSuspending ? 'suspend' : 'restore'} ${targetType.toLowerCase()}.`);
+      showToast('error', `Failed to ${isSanctioning ? sanctionVerb : 'restore'} ${targetType.toLowerCase()}.`);
       setIsLoading(false); // only stop loading on error, let parent unmount on success
     }
   };
@@ -66,13 +71,13 @@ export function SanctionModal({ isOpen, onClose, targetName, targetType, current
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200">
 
         {/* Header */}
-        <div className={`p-6 border-b flex items-center gap-4 ${isSuspending ? 'bg-red-50' : 'bg-emerald-50'}`}>
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${isSuspending ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
-            {isSuspending ? <AlertTriangle className="w-6 h-6" /> : <ShieldCheck className="w-6 h-6" />}
+        <div className={`p-6 border-b flex items-center gap-4 ${isSanctioning ? 'bg-red-50' : 'bg-emerald-50'}`}>
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${isSanctioning ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
+            {isSanctioning ? <AlertTriangle className="w-6 h-6" /> : <ShieldCheck className="w-6 h-6" />}
           </div>
           <div>
             <h2 className="text-xl font-bold text-gray-900">
-              {isSuspending ? `Suspend ${targetType}` : `Restore ${targetType}`}
+              {isSanctioning ? sanctionTitle : restoreTitle}
             </h2>
             <p className="text-sm text-gray-600 mt-1">
               Target: <span className="font-bold text-gray-900">{targetName}</span>
@@ -83,11 +88,11 @@ export function SanctionModal({ isOpen, onClose, targetName, targetType, current
         {/* Content */}
         <div className="p-6 space-y-6">
           {/* Warning Box */}
-          <div className={`p-4 rounded-xl border text-sm ${isSuspending ? 'bg-red-50 border-red-200 text-red-800' : 'bg-blue-50 border-blue-200 text-blue-800'}`}>
-            {isSuspending ? (
-              <p>Suspending this {targetType.toLowerCase()} will immediately hide it from public view and notify the owner. Active services may be interrupted.</p>
+          <div className={`p-4 rounded-xl border text-sm ${isSanctioning ? 'bg-red-50 border-red-200 text-red-800' : 'bg-blue-50 border-blue-200 text-blue-800'}`}>
+            {isSanctioning ? (
+              <p>{isBooth ? 'Banning' : 'Suspending'} this {targetType.toLowerCase()} will immediately hide it from public view and notify the owner. Active services may be interrupted.</p>
             ) : (
-              <p>Restoring this {targetType.toLowerCase()} will reactivate it on the platform and notify the owner. Ensure all violations have been resolved.</p>
+              <p>Restoring this {targetType.toLowerCase()} will {isBooth ? 'lift the ban and notify the owner' : 'reactivate it on the platform and notify the owner'}. Ensure all violations have been resolved.</p>
             )}
           </div>
 
@@ -103,7 +108,7 @@ export function SanctionModal({ isOpen, onClose, targetName, targetType, current
                 setReason(e.target.value);
                 if (error) setError('');
               }}
-              placeholder={`Enter detailed reason for ${isSuspending ? 'suspension' : 'restoration'}...`}
+              placeholder={`Enter detailed reason for ${isSanctioning ? sanctionNoun : 'restoration'}...`}
               className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none disabled:bg-gray-50 disabled:text-gray-500"
               rows={5}
             />
@@ -116,7 +121,7 @@ export function SanctionModal({ isOpen, onClose, targetName, targetType, current
           </div>
 
           {/* Confirmation Checkbox */}
-          {isSuspending && (
+          {isSanctioning && (
             <label className="flex items-start gap-3 cursor-pointer group">
               <input
                 type="checkbox"
@@ -129,7 +134,7 @@ export function SanctionModal({ isOpen, onClose, targetName, targetType, current
                 className="mt-0.5 w-4 h-4 text-red-600 rounded border-gray-300 focus:ring-red-500 disabled:opacity-50"
               />
               <span className="text-sm text-gray-700 group-hover:text-gray-900">
-                I confirm that I want to suspend this {targetType.toLowerCase()} and have provided a valid reason.
+                I confirm that I want to {sanctionVerb} this {targetType.toLowerCase()} and have provided a valid reason.
               </span>
             </label>
           )}
@@ -150,7 +155,7 @@ export function SanctionModal({ isOpen, onClose, targetName, targetType, current
             disabled={isLoading}
             onClick={handleSubmit}
             className={`flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white rounded-xl transition-colors disabled:opacity-50 ${
-              isSuspending ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'
+              isSanctioning ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'
             }`}
           >
             {isLoading ? (
@@ -159,7 +164,7 @@ export function SanctionModal({ isOpen, onClose, targetName, targetType, current
                 Processing...
               </>
             ) : (
-              isSuspending ? 'Suspend Now' : 'Restore Now'
+              isSanctioning ? (isBooth ? 'Ban Now' : 'Suspend Now') : 'Restore Now'
             )}
           </button>
         </div>

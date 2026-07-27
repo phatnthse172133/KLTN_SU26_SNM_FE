@@ -26,9 +26,15 @@ export interface ModerationStatusRequest {
   complaintId?: string | null;
 }
 
+export interface BoothModerationActionRequest {
+  reason: string;
+}
+
 // ----------------------------------------------------------------------------
 // Night Market Moderation
 // ----------------------------------------------------------------------------
+
+export type MarketModerationStatus = 'Active' | 'Suspended';
 
 export interface MarketModerationOverview {
   id: string;
@@ -40,7 +46,7 @@ export interface MarketModerationOverview {
   openingHours?: string | null;
   closingHours?: string | null;
   lifecycleStatus: string;
-  moderationStatus: 'Active' | 'Suspended';
+  moderationStatus: MarketModerationStatus;
   totalBooths: number;
   activeBooths: number;
   totalComplaintCount: number;
@@ -97,7 +103,7 @@ export interface BoothDocument {
   updatedAt?: string;
 }
 
-export type BoothModerationStatus = 'PendingApproval' | 'Active' | 'Inactive' | 'Suspended' | 'Closed';
+export type BoothModerationStatus = 'Active' | 'Inactive' | 'Banned';
 
 export interface BoothModerationOverview {
   id: string;
@@ -194,8 +200,12 @@ export const adminModerationService = {
     return apiClient.get<BaseResponse<BoothModerationDetail>>(`/admin/booths/${boothId}`);
   },
 
-  changeBoothStatus: async (boothId: string, req: ModerationStatusRequest) => {
-    return apiClient.patch<BaseResponse<ModerationActionResponse>>(`/admin/booths/${boothId}/status`, req);
+  banBooth: async (boothId: string, req: BoothModerationActionRequest) => {
+    return apiClient.post<BaseResponse<ModerationActionResponse>>(`/admin/moderation/booths/${boothId}/ban`, req);
+  },
+
+  restoreBooth: async (boothId: string, req: BoothModerationActionRequest) => {
+    return apiClient.post<BaseResponse<ModerationActionResponse>>(`/admin/moderation/booths/${boothId}/restore`, req);
   },
 
   getBoothModerationHistory: async (boothId: string, page = 1, pageSize = 10) => {

@@ -1,13 +1,14 @@
 "use client";
 
-import { Search, Eye, Ban, CheckCircle, Mail, Phone, Calendar, ShoppingBag, Store, MapPin, ArrowLeft, ShieldCheck, User, DollarSign, FileText, RotateCw, Upload, Loader2 } from 'lucide-react';
-import { useState, useMemo, useEffect } from 'react';
+import { Eye, Ban, CheckCircle, Mail, Phone, Calendar, Store, MapPin, ArrowLeft, DollarSign, FileText, RotateCw, Loader2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
 import { Modal } from './components/Modal';
 import { Pagination } from './components/Pagination';
-type RoleTab = 'customer' | 'booth_owner';
-import { adminAccountService, UserStatus } from '@/application/features/admin/adminAccountService';
+type RoleTab = 'customer' | 'booth_owner' | 'market_owner';
+import { adminAccountService, ManagedUserResponse, UserStatus, UserStatusHistoryResponse } from '@/application/features/admin/adminAccountService';
+import { getErrorMessage } from '@/shared/errors/errorMapper';
 
-type StatusTab = 'Active' | 'Inactive' | 'Suspended';
+type StatusTab = 'Active' | 'Inactive';
 
 const cardStyle: React.CSSProperties = {
   background: '#FFFFFF',
@@ -29,7 +30,7 @@ const thStyle: React.CSSProperties = {
 
 function statusPill(status: string): React.CSSProperties {
   if (status === 'Active') return { display: 'inline-flex', alignItems: 'center', background: 'rgba(16,185,129,0.15)', color: '#10B981', border: '1px solid rgba(16,185,129,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '12px', fontWeight: 600 };
-  if (status === 'Suspended') return { display: 'inline-flex', alignItems: 'center', background: 'rgba(239,68,68,0.15)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '12px', fontWeight: 600 };
+  if (status === 'Inactive') return { display: 'inline-flex', alignItems: 'center', background: 'rgba(239,68,68,0.15)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '12px', fontWeight: 600 };
   return { display: 'inline-flex', alignItems: 'center', background: 'rgba(100,116,139,0.15)', color: '#64748B', border: '1px solid rgba(100,116,139,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '12px', fontWeight: 600 };
 }
 
@@ -37,111 +38,241 @@ interface AccountsProps {
   initialUserId?: string | null;
 }
 
+interface AccountListItem {
+  id: string;
+  name: string;
+  email: string;
+  role: RoleTab;
+  status: string;
+  avatar: string;
+  registered: string;
+  phone: string;
+  address: string;
+  totalOrders?: number;
+  totalSpent?: string;
+  boothsOwned?: unknown[];
+}
+
+interface BoothDocumentSummary {
+  verified?: boolean;
+  uploadedAt?: string;
+}
+
+interface OwnedBoothSummary {
+  id: string;
+  image?: string | null;
+  name: string;
+  status: string;
+  market?: string;
+  location?: string;
+  createdAt?: string;
+  revenue?: string;
+  description?: string | null;
+  documents?: {
+    businessLicense?: BoothDocumentSummary;
+    foodSafety?: BoothDocumentSummary;
+    healthPermit?: BoothDocumentSummary;
+  };
+}
+
+const roleToApiRole = (role: RoleTab): string => {
+  if (role === 'booth_owner') return 'BoothOwner';
+  if (role === 'market_owner') return 'MarketOwner';
+  return 'Customer';
+};
+
+const mapUser = (user: ManagedUserResponse): AccountListItem => ({
+  id: user.id,
+  name: user.fullName,
+  email: user.email,
+  role: user.role === 'BoothOwner' ? 'booth_owner' : user.role === 'MarketOwner' ? 'market_owner' : 'customer',
+  status: user.status,
+  avatar: user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.fullName)}&background=random`,
+  registered: user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US') : 'No data available',
+  phone: user.phone || 'No data available',
+  address: user.address || 'No data available',
+});
+
 export function Accounts({ initialUserId }: AccountsProps) {
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<AccountListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [roleTab, setRoleTab] = useState<RoleTab>(initialUserId ? 'booth_owner' : 'customer');
   const [statusTab, setStatusTab] = useState<StatusTab>('Active');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(initialUserId || null);
   const [previewDoc, setPreviewDoc] = useState<{ url: string; label: string } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [hoveredRow, setHoveredRow] = useState<number | null>(null);
+  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
+  const [banModalUser, setBanModalUser] = useState<AccountListItem | null>(null);
+  const [banReason, setBanReason] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [statusHistory, setStatusHistory] = useState<UserStatusHistoryResponse[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [totalItems, setTotalItems] = useState(0);
+  const [roleCounts, setRoleCounts] = useState({ customer: 0, booth_owner: 0, market_owner: 0 });
+  const [statusCounts, setStatusCounts] = useState({ Active: 0, Inactive: 0 });
+  const [listError, setListError] = useState<string | null>(null);
   const itemsPerPage = 12;
 
   useEffect(() => {
-    if (initialUserId) {
+    if (!initialUserId) return;
+    void Promise.resolve().then(() => {
       setSelectedId(initialUserId);
       setRoleTab('booth_owner');
-    }
+    });
   }, [initialUserId]);
 
+  const fetchUsers = useCallback(async () => {
+    try {
+      setLoading(true);
+      setListError(null);
+      const res = await adminAccountService.getUsers({
+        page: currentPage,
+        pageSize: itemsPerPage,
+        role: roleToApiRole(roleTab),
+        status: statusTab,
+        keyword: debouncedSearch || undefined,
+      });
+      if (res.success) {
+        setUsers(res.data.items.map(mapUser));
+        setTotalItems(res.data.total ?? res.data.items.length);
+      } else {
+        setUsers([]);
+        setTotalItems(0);
+        setListError(getErrorMessage(res));
+      }
+    } catch (error: unknown) {
+      setUsers([]);
+      setTotalItems(0);
+      setListError(getErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  }, [currentPage, roleTab, statusTab, debouncedSearch]);
+
+  const fetchCounts = useCallback(async () => {
+    try {
+      const roles: RoleTab[] = ['customer', 'booth_owner', 'market_owner'];
+      const counts: Record<string, number> = {};
+      for (const r of roles) {
+        const res = await adminAccountService.getUsers({ page: 1, pageSize: 1, role: roleToApiRole(r) });
+        if (res.success) counts[r] = res.data.total ?? 0;
+      }
+      setRoleCounts({
+        customer: counts['customer'] ?? 0,
+        booth_owner: counts['booth_owner'] ?? 0,
+        market_owner: counts['market_owner'] ?? 0,
+      });
+
+      const statusRes = await adminAccountService.getUsers({ page: 1, pageSize: 1, role: roleToApiRole(roleTab), status: 'Active' });
+      const inactiveRes = await adminAccountService.getUsers({ page: 1, pageSize: 1, role: roleToApiRole(roleTab), status: 'Inactive' });
+      setStatusCounts({
+        Active: statusRes.success ? (statusRes.data.total ?? 0) : 0,
+        Inactive: inactiveRes.success ? (inactiveRes.data.total ?? 0) : 0,
+      });
+    } catch {
+      // counts are non-critical
+    }
+  }, [roleTab]);
+
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        setLoading(true);
-        const res = await adminAccountService.getUsers(1, 1000);
-        if (res.success) {
-          const mapped = res.data.items.map(u => ({
-            id: u.id,
-            name: u.fullName,
-            email: u.email,
-            // Backend returns "BoothOwner" (PascalCase), map to UI's "booth_owner"
-            role: u.role === 'BoothOwner' ? 'booth_owner' : 'customer',
-            status: u.status, // e.g. "Active", "Suspended", "PendingVerification"
-            avatar: u.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.fullName)}&background=random`,
-            registered: u.createdAt ? new Date(u.createdAt).toLocaleDateString('vi-VN') : 'No data available',
-            phone: u.phone || 'No data available',
-            address: 'No data available',
-          }));
-          setUsers(mapped);
-        }
-      } catch (error) {
-        console.error("Failed to load users", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchUsers();
-  }, []);
+    const t = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setCurrentPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
-  const roleCounts = useMemo(() => ({
-    customer: users.filter(u => u.role === 'customer').length,
-    booth_owner: users.filter(u => u.role === 'booth_owner').length,
-  }), [users]);
+  useEffect(() => {
+    void Promise.resolve().then(fetchUsers);
+  }, [fetchUsers]);
 
-  const statusCounts = useMemo(() => {
-    const base = users.filter(u => u.role === roleTab);
-    return {
-      Active: base.filter(u => u.status === 'Active').length,
-      Inactive: base.filter(u => (u.status as string) === 'Inactive').length,
-      Suspended: base.filter(u => u.status === 'Suspended').length,
-    };
-  }, [roleTab, users]);
+  useEffect(() => {
+    void Promise.resolve().then(fetchCounts);
+  }, [fetchCounts]);
 
-  const filtered = useMemo(() => {
-    return users.filter(u => {
-      if (u.role !== roleTab) return false;
-      const effectiveStatus = u.status === 'Active' ? 'Active' : u.status === 'Suspended' ? 'Suspended' : 'Inactive';
-      if (effectiveStatus !== statusTab) return false;
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
-      }
-      return true;
-    });
-  }, [roleTab, statusTab, searchQuery, users]);
+  useEffect(() => {
+    if (!successMessage) return;
 
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
-  const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    const timeoutId = window.setTimeout(() => {
+      setSuccessMessage(null);
+    }, 3000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [successMessage]);
+
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const paginated = users;
   const selected = users.find(u => u.id === selectedId);
 
   const handleRoleChange = (tab: RoleTab) => { setRoleTab(tab); setStatusTab('Active'); setCurrentPage(1); };
   const handleStatusChange = (tab: StatusTab) => { setStatusTab(tab); setCurrentPage(1); };
 
-  const handleBanUser = async (id: string) => {
+  const handleOpenBanModal = (user: AccountListItem) => {
+    setBanModalUser(user);
+    setBanReason('');
+    setApiError(null);
+    setSuccessMessage(null);
+  };
+
+  const handleCloseBanModal = () => {
+    setBanModalUser(null);
+    setBanReason('');
+    setApiError(null);
+  };
+
+  const handleConfirmStatusChange = async () => {
+    if (!banModalUser) return;
+    const normalizedReason = banReason.trim();
+    if (normalizedReason.length < 10 || normalizedReason.length > 1000) return;
     try {
-      // Send integer enum (Suspended = 2) to match backend ChangeUserStatusRequest
-      await adminAccountService.changeUserStatus(id, UserStatus.Suspended);
-      setUsers(prev => prev.map(u => u.id === id ? { ...u, status: 'Suspended' } : u));
-    } catch (e) {
-      console.error('Failed to suspend user:', e);
+      setIsSubmitting(true);
+      setApiError(null);
+      const isCurrentlyActive = banModalUser.status === 'Active';
+      const newStatus = isCurrentlyActive ? UserStatus.Inactive : UserStatus.Active;
+      await adminAccountService.changeUserStatus(banModalUser.id, {
+        status: newStatus,
+        reason: normalizedReason,
+      });
+      setSuccessMessage(
+        isCurrentlyActive
+          ? `${banModalUser.name} has been banned successfully. An email notification with the reason has been queued for delivery.`
+          : `${banModalUser.name} has been restored successfully. An email notification with the reason has been queued for delivery.`
+      );
+      handleCloseBanModal();
+      await Promise.all([fetchUsers(), fetchCounts()]);
+    } catch (e: unknown) {
+      const msg = getErrorMessage(e);
+      setApiError(msg);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleRestoreUser = async (id: string) => {
+  const handleFetchHistory = async () => {
+    if (!selected) return;
     try {
-      // Send integer enum (Active = 1) to match backend ChangeUserStatusRequest
-      await adminAccountService.changeUserStatus(id, UserStatus.Active);
-      setUsers(prev => prev.map(u => u.id === id ? { ...u, status: 'Active' } : u));
-    } catch (e) {
-      console.error('Failed to restore user:', e);
+      setHistoryLoading(true);
+      const resp = await adminAccountService.getUserStatusHistory(selected.id);
+      if (resp.success) {
+        setStatusHistory(resp.data.items);
+      }
+      setShowHistory(true);
+    } catch {
+      setStatusHistory([]);
+      setShowHistory(true);
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
   // --- Booth Owner Detailed Screen ---
   if (selectedId && selected && selected.role === 'booth_owner') {
-    const ownedBooths: any[] = [];
+    const ownedBooths: OwnedBoothSummary[] = [];
     return (
       <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         <div>
@@ -179,16 +310,17 @@ export function Accounts({ initialUserId }: AccountsProps) {
             </div>
             
             <div style={{ display: 'flex', gap: '0.75rem' }}>
-              {selected.status !== 'Suspended' ? (
+              {selected.status === 'Active' && (
                 <button
-                  onClick={() => handleBanUser(selected.id)}
+                  onClick={() => { setSelectedId(null); handleOpenBanModal(selected); }}
                   style={{ padding: '0.5rem 1rem', background: '#FEF2F2', border: '1px solid #FEE2E2', color: '#EF4444', borderRadius: '0.5rem', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.375rem' }}
                 >
                   <Ban style={{ width: '1rem', height: '1rem' }} /> Ban Account
                 </button>
-              ) : (
+              )}
+              {selected.status === 'Inactive' && (
                 <button
-                  onClick={() => handleRestoreUser(selected.id)}
+                  onClick={() => { setSelectedId(null); handleOpenBanModal(selected); }}
                   style={{ padding: '0.5rem 1rem', background: '#ECFDF5', border: '1px solid #D1FAE5', color: '#10B981', borderRadius: '0.5rem', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.375rem' }}
                 >
                   <CheckCircle style={{ width: '1rem', height: '1rem' }} /> Restore Account
@@ -241,7 +373,6 @@ export function Accounts({ initialUserId }: AccountsProps) {
                       )}
                       <div>
                         <h4 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#111827', margin: 0 }}>{booth.name}</h4>
-                        <p style={{ fontSize: '0.8125rem', color: '#64748B', margin: '0.15rem 0 0', fontFamily: 'monospace' }}>ID: #{booth.id}</p>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.4rem' }}>
                           <span style={{
                             display: 'inline-flex',
@@ -309,9 +440,9 @@ export function Accounts({ initialUserId }: AccountsProps) {
                       
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                         {[
-                          { doc: booth.documents?.businessLicense, label: 'Business License', images: ['https://images.unsplash.com/photo-1457369804613-52c61a468e7d?w=400'] },
-                          { doc: booth.documents?.foodSafety, label: 'Food Safety Certificate', images: ['https://images.unsplash.com/photo-1554774853-aae0a22c8aa4?w=400', 'https://images.unsplash.com/photo-1506157786151-b8491531f063?w=400'] },
-                          { doc: booth.documents?.healthPermit, label: 'Health Permit', images: ['https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400'] },
+                          { doc: booth.documents?.businessLicense, label: 'Business License', images: [] },
+                          { doc: booth.documents?.foodSafety, label: 'Food Safety Certificate', images: [] },
+                          { doc: booth.documents?.healthPermit, label: 'Health Permit', images: [] },
                         ].filter(({ doc }) => doc).map(({ doc, label, images }) => doc && (
                           <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -411,6 +542,39 @@ export function Accounts({ initialUserId }: AccountsProps) {
         </div>
       </div>
 
+      {successMessage && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1rem',
+            padding: '0.875rem 1rem',
+            background: '#ECFDF5',
+            border: '1px solid #A7F3D0',
+            borderRadius: '0.75rem',
+            color: '#047857',
+            fontSize: '0.875rem',
+            fontWeight: 500,
+          }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <CheckCircle style={{ width: '1rem', height: '1rem', flexShrink: 0 }} />
+            {successMessage}
+          </span>
+          <button
+            type="button"
+            onClick={() => setSuccessMessage(null)}
+            aria-label="Dismiss success message"
+            style={{ border: 'none', background: 'transparent', color: '#047857', cursor: 'pointer', fontSize: '1.25rem', lineHeight: 1, padding: '0.125rem' }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Main Card */}
       <div style={cardStyle}>
 
@@ -427,6 +591,7 @@ export function Accounts({ initialUserId }: AccountsProps) {
             {([
               { key: 'customer' as RoleTab, label: 'Customers', count: roleCounts.customer },
               { key: 'booth_owner' as RoleTab, label: 'Booth Owners', count: roleCounts.booth_owner },
+              { key: 'market_owner' as RoleTab, label: 'Market Owners', count: roleCounts.market_owner },
             ]).map(tab => {
               const active = roleTab === tab.key;
               return (
@@ -467,7 +632,7 @@ export function Accounts({ initialUserId }: AccountsProps) {
         {/* Status Pills */}
         <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', background: '#F8FAFC' }}>
           <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto' }}>
-            {(['Active', 'Inactive', 'Suspended'] as StatusTab[]).map(tab => {
+            {(['Active', 'Inactive'] as StatusTab[]).map(tab => {
               const active = statusTab === tab;
               const count = statusCounts[tab];
               return (
@@ -503,13 +668,23 @@ export function Accounts({ initialUserId }: AccountsProps) {
               );
             })}
           </div>
-          <span style={{ fontSize: '0.8125rem', color: '#64748B', whiteSpace: 'nowrap' }}>{filtered.length} users</span>
+          <span style={{ fontSize: '0.8125rem', color: '#64748B', whiteSpace: 'nowrap' }}>{totalItems} users</span>
         </div>
 
         {/* Users Table */}
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem' }}>
             <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+          </div>
+        ) : listError ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', padding: '3rem' }}>
+            <p style={{ fontSize: '0.875rem', color: '#DC2626', margin: 0, fontWeight: 500 }}>{listError}</p>
+            <button
+              onClick={() => fetchUsers()}
+              style={{ padding: '0.5rem 1rem', border: '1px solid #E2E8F0', background: '#FFFFFF', color: '#4F46E5', borderRadius: '0.5rem', fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.375rem' }}
+            >
+              <RotateCw style={{ width: '0.875rem', height: '0.875rem' }} /> Retry
+            </button>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
@@ -553,18 +728,19 @@ export function Accounts({ initialUserId }: AccountsProps) {
                         <Eye style={{ width: '0.875rem', height: '0.875rem', color: '#64748B' }} />
                       </button>
                       
-                      {u.status !== 'Suspended' ? (
+                      {u.status === 'Active' && (
                         <button
                           title="Ban User"
-                          onClick={() => handleBanUser(u.id)}
+                          onClick={() => handleOpenBanModal(u)}
                           style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '2rem', height: '2rem', borderRadius: '0.5rem', border: '1px solid #FEE2E2', background: '#FEF2F2', cursor: 'pointer', transition: 'all 0.15s' }}
                         >
                           <Ban style={{ width: '0.875rem', height: '0.875rem', color: '#EF4444' }} />
                         </button>
-                      ) : (
+                      )}
+                      {u.status === 'Inactive' && (
                         <button
                           title="Restore User"
-                          onClick={() => handleRestoreUser(u.id)}
+                          onClick={() => handleOpenBanModal(u)}
                           style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '2rem', height: '2rem', borderRadius: '0.5rem', border: '1px solid #D1FAE5', background: '#ECFDF5', cursor: 'pointer', transition: 'all 0.15s' }}
                         >
                           <CheckCircle style={{ width: '0.875rem', height: '0.875rem', color: '#10B981' }} />
@@ -588,19 +764,19 @@ export function Accounts({ initialUserId }: AccountsProps) {
 
         {/* Pagination */}
         <div style={{ borderTop: '1px solid #E5E7EB' }}>
-          <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} totalItems={filtered.length} itemsPerPage={itemsPerPage} />
+          <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} totalItems={totalItems} itemsPerPage={itemsPerPage} />
         </div>
       </div>
 
       {/* Detail Modal for Customers */}
-      <Modal isOpen={!!(selected && selected.role === 'customer')} onClose={() => setSelectedId(null)} title="User Details" size="md">
+      <Modal isOpen={!!(selected && (selected.role === 'customer' || selected.role === 'market_owner'))} onClose={() => { setSelectedId(null); setShowHistory(false); setStatusHistory([]); }} title="User Details" size="md">
         {selected && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
               <img src={selected.avatar} alt={selected.name} style={{ width: '5rem', height: '5rem', borderRadius: '9999px', objectFit: 'cover', boxShadow: '0 0 0 3px rgba(99,102,241,0.3)' }} />
               <div>
                 <h4 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#111827', margin: 0 }}>{selected.name}</h4>
-                <p style={{ fontSize: '12px', color: '#64748B', margin: '2px 0 0' }}>Role: Customer · ID: #{selected.id}</p>
+                <p style={{ fontSize: '12px', color: '#64748B', margin: '2px 0 0' }}>Role: {selected.role === 'market_owner' ? 'Market Owner' : 'Customer'}</p>
                 <span style={statusPill(selected.status)}>{selected.status}</span>
               </div>
             </div>
@@ -634,25 +810,150 @@ export function Accounts({ initialUserId }: AccountsProps) {
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
-              {selected.status === 'Active' ? (
+              {selected.status === 'Active' && (
                 <button
-                  onClick={() => { handleBanUser(selected.id); setSelectedId(null); }}
+                  onClick={() => { handleOpenBanModal(selected); }}
                   style={{ flex: 1, padding: '0.5rem 1rem', background: '#FEF2F2', border: '1px solid #FEE2E2', color: '#EF4444', borderRadius: '0.5rem', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.375rem' }}
                 >
                   <Ban style={{ width: '1.125rem', height: '1.125rem' }} /> Ban Account
                 </button>
-              ) : (
+              )}
+              {selected.status === 'Inactive' && (
                 <button
-                  onClick={() => { handleRestoreUser(selected.id); setSelectedId(null); }}
+                  onClick={() => { handleOpenBanModal(selected); }}
                   style={{ flex: 1, padding: '0.5rem 1rem', background: '#ECFDF5', border: '1px solid #D1FAE5', color: '#10B981', borderRadius: '0.5rem', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.375rem' }}
                 >
                   <CheckCircle style={{ width: '1.125rem', height: '1.125rem' }} /> Restore Account
                 </button>
               )}
             </div>
+
+            <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: '1rem' }}>
+              <button
+                onClick={handleFetchHistory}
+                disabled={historyLoading}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'transparent', border: 'none', color: '#4F46E5', cursor: 'pointer', fontWeight: 600, fontSize: '0.8125rem', padding: 0 }}
+              >
+                {historyLoading ? (
+                  <Loader2 style={{ width: '0.875rem', height: '0.875rem', animation: 'spin 1s linear infinite' }} />
+                ) : null}
+                {showHistory ? 'Hide Status History' : 'View Status History'}
+              </button>
+              {showHistory && (
+                <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '15rem', overflowY: 'auto' }}>
+                  {statusHistory.length === 0 ? (
+                    <p style={{ fontSize: '0.8125rem', color: '#94A3B8', fontStyle: 'italic', margin: 0 }}>No status history available.</p>
+                  ) : (
+                    statusHistory.map(hist => (
+                      <div key={hist.id} style={{ padding: '0.75rem', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={statusPill(hist.previousStatus)}>{hist.previousStatus}</span>
+                            <span style={{ color: '#94A3B8', fontSize: '0.75rem' }}>→</span>
+                            <span style={statusPill(hist.newStatus)}>{hist.newStatus}</span>
+                          </div>
+                          <span style={{ fontSize: '0.6875rem', color: '#94A3B8' }}>
+                            {new Date(hist.createdAt).toLocaleString('en-US')}
+                          </span>
+                        </div>
+                        <p style={{ fontSize: '0.8125rem', color: '#475569', margin: '0.5rem 0 0' }}>
+                          <strong>Reason:</strong> {hist.reason}
+                        </p>
+                        <p style={{ fontSize: '0.6875rem', color: '#94A3B8', margin: '0.25rem 0 0' }}>
+                          By: {hist.changedByAdminName}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </Modal>
+
+      {banModalUser && (
+        <Modal
+          isOpen={true}
+          onClose={handleCloseBanModal}
+          title={banModalUser.status === 'Active' ? 'Ban Account' : 'Restore Account'}
+          size="sm"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ padding: '0.75rem', background: banModalUser.status === 'Active' ? '#FEF2F2' : '#ECFDF5', border: `1px solid ${banModalUser.status === 'Active' ? '#FEE2E2' : '#D1FAE5'}`, borderRadius: '0.5rem' }}>
+              <p style={{ fontSize: '0.875rem', color: '#334155', margin: 0 }}>
+                You are about to <strong style={{ color: banModalUser.status === 'Active' ? '#EF4444' : '#10B981' }}>{banModalUser.status === 'Active' ? 'ban' : 'restore'}</strong> the account of <strong>{banModalUser.name}</strong> ({banModalUser.email}).
+              </p>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: '#334155', marginBottom: '0.375rem' }}>
+                Reason <span style={{ color: '#EF4444' }}>*</span>
+              </label>
+              <textarea
+                value={banReason}
+                onChange={(e) => { setBanReason(e.target.value); setApiError(null); }}
+                placeholder="Enter reason for this action (10-1000 characters)..."
+                maxLength={1000}
+                style={{ width: '100%', padding: '0.5rem 0.75rem', border: `1px solid ${banReason.trim().length > 0 && banReason.trim().length < 10 ? '#FCA5A5' : '#E2E8F0'}`, borderRadius: '0.375rem', fontSize: '0.8125rem', resize: 'vertical', minHeight: '4rem', fontFamily: 'inherit' }}
+                rows={3}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.25rem' }}>
+                <span style={{ fontSize: '0.6875rem', color: banReason.trim().length > 0 && banReason.trim().length < 10 ? '#EF4444' : '#94A3B8' }}>
+                  {banReason.trim().length === 0
+                    ? 'Reason is required (10-1000 characters)'
+                    : banReason.trim().length < 10
+                      ? `At least 10 characters required (current: ${banReason.trim().length})`
+                      : ''}
+                </span>
+                <span style={{ fontSize: '0.6875rem', color: '#94A3B8' }}>
+                  {banReason.trim().length}/1000
+                </span>
+              </div>
+            </div>
+            {apiError && (
+              <div style={{ padding: '0.625rem 0.75rem', background: '#FEF2F2', border: '1px solid #FEE2E2', borderRadius: '0.375rem' }}>
+                <p style={{ fontSize: '0.8125rem', color: '#DC2626', margin: 0, fontWeight: 500 }}>{apiError}</p>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                onClick={handleCloseBanModal}
+                disabled={isSubmitting}
+                style={{ padding: '0.5rem 1rem', border: '1px solid #E2E8F0', background: '#FFFFFF', color: '#475569', borderRadius: '0.5rem', fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmStatusChange}
+                disabled={isSubmitting || banReason.trim().length < 10 || banReason.trim().length > 1000}
+                style={{
+                  padding: '0.5rem 1rem',
+                  border: 'none',
+                  background: banModalUser.status === 'Active' ? '#EF4444' : '#10B981',
+                  color: '#FFFFFF',
+                  borderRadius: '0.5rem',
+                  fontWeight: 600,
+                  fontSize: '0.8125rem',
+                  cursor: (isSubmitting || banReason.trim().length < 10 || banReason.trim().length > 1000) ? 'not-allowed' : 'pointer',
+                  opacity: (isSubmitting || banReason.trim().length < 10 || banReason.trim().length > 1000) ? 0.5 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.375rem',
+                }}
+              >
+                {isSubmitting ? (
+                  <Loader2 style={{ width: '0.875rem', height: '0.875rem', animation: 'spin 1s linear infinite' }} />
+                ) : banModalUser.status === 'Active' ? (
+                  <Ban style={{ width: '0.875rem', height: '0.875rem' }} />
+                ) : (
+                  <CheckCircle style={{ width: '0.875rem', height: '0.875rem' }} />
+                )}
+                Confirm
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

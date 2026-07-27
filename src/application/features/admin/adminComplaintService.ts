@@ -7,11 +7,9 @@ import type { BaseResponse, PaginationResponse, Complaint } from "@/shared/types
 // ============================================================================
 
 export enum ComplaintStatus {
-  Submitted = 0,
-  UnderInvestigation = 1,
-  Resolved = 2,
-  Rejected = 3,
-  Closed = 4
+  Pending = 0,
+  Resolved = 1,
+  Rejected = 2,
 }
 
 export enum ComplaintResolutionAction {
@@ -30,12 +28,17 @@ export interface UpdateComplaintStatusRequest {
 
 export const adminComplaintService = {
   /**
-   * Fetches all complaints for Admin
+   * Fetches all complaints for Admin with server-side filtering and pagination
    * Backend: GET /api/complaints
    */
-  getAllComplaints: async (page = 1, pageSize = 10) => {
-    let url = `/complaints?Page=${page}&PageSize=${pageSize}`;
-    return apiClient.get<BaseResponse<PaginationResponse<Complaint>>>(url);
+  getAllComplaints: async (page = 1, pageSize = 10, filters?: { status?: ComplaintStatus; keyword?: string; boothId?: string }) => {
+    const params = new URLSearchParams();
+    params.set('Page', String(page));
+    params.set('PageSize', String(pageSize));
+    if (filters?.status !== undefined) params.set('Status', String(filters.status));
+    if (filters?.keyword) params.set('Keyword', filters.keyword);
+    if (filters?.boothId) params.set('BoothId', filters.boothId);
+    return apiClient.get<BaseResponse<PaginationResponse<Complaint>>>(`/complaints?${params.toString()}`);
   },
 
   /**
@@ -44,5 +47,13 @@ export const adminComplaintService = {
    */
   updateComplaintStatus: async (id: string, payload: UpdateComplaintStatusRequest) => {
     return apiClient.put<BaseResponse<Complaint>>(`/complaints/${id}/status`, payload);
+  },
+
+  /**
+   * Fetches complaint counts by status for tab badges
+   * Backend: GET /api/complaints/counts
+   */
+  getComplaintCounts: async () => {
+    return apiClient.get<BaseResponse<{ pending: number; resolved: number; rejected: number; total: number }>>(`/complaints/counts`);
   }
 };

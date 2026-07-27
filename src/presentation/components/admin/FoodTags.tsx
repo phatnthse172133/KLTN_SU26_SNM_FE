@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   Plus, Search, Edit2, Trash2, Tag, BookOpen, Clock, 
   Coffee, Utensils, UtensilsCrossed, Leaf
@@ -67,7 +67,8 @@ export default function FoodTags() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<FoodTag | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -77,32 +78,33 @@ export default function FoodTags() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const fetchTags = async () => {
+  const fetchTags = useCallback(async () => {
     try {
       setLoading(true);
+      setListError(null);
       const data = await adminFoodTagService.getTags({
         page,
         limit,
         search: debouncedSearch,
         tagGroup: selectedGroup === 'All' ? undefined : selectedGroup
       });
-      if (data?.data) {
-        setTags(data.data.items || []);
-        setTotalCount(data.data.totalCount || 0);
-      }
-    } catch (error) {
-      console.error('Failed to fetch food tags', error);
+      setTags(data.items || []);
+      setTotalCount(data.total || 0);
+    } catch (err: unknown) {
+      setListError(getErrorMessage(err));
+      setTags([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, limit, debouncedSearch, selectedGroup]);
 
   useEffect(() => {
-    fetchTags();
-  }, [debouncedSearch, page, selectedGroup]);
+    void Promise.resolve().then(() => fetchTags());
+  }, [fetchTags]);
 
   const openModal = (tag?: FoodTag) => {
-    setError(null);
+    setFormError(null);
     if (tag) {
       setEditingTag(tag);
       setFormData({
@@ -129,7 +131,7 @@ export default function FoodTags() {
     e.preventDefault();
     try {
       setIsSubmitting(true);
-      setError(null);
+      setFormError(null);
 
       if (editingTag) {
         await adminFoodTagService.updateTag(editingTag.id, {
@@ -151,9 +153,11 @@ export default function FoodTags() {
       
       showToast('success', editingTag ? 'The food tag has been updated successfully.' : 'The food tag has been created successfully.');
       setIsModalOpen(false);
-      fetchTags();
-    } catch (err: any) {
-      showToast('error', getErrorMessage(err));
+      await fetchTags();
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      setFormError(message);
+      showToast('error', message);
     } finally {
       setIsSubmitting(false);
     }
@@ -166,7 +170,7 @@ export default function FoodTags() {
       await adminFoodTagService.deleteTag(deleteTarget.id);
       showToast('success', 'The food tag has been deleted successfully.');
       setDeleteTarget(null);
-      fetchTags();
+      await fetchTags();
     } catch (err) {
       showToast('error', getErrorMessage(err));
     } finally {
@@ -222,10 +226,11 @@ export default function FoodTags() {
             />
           </div>
           <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 hide-scrollbar">
-            {['All', FoodTagGroup.Category, FoodTagGroup.Cuisine, FoodTagGroup.Dietary, FoodTagGroup.Flavor, FoodTagGroup.Ingredient, FoodTagGroup.TimeOfDay, FoodTagGroup.CookingMethod].map(tab => (
+            {(['All', FoodTagGroup.Category, FoodTagGroup.Cuisine, FoodTagGroup.Dietary, FoodTagGroup.Flavor, FoodTagGroup.Ingredient, FoodTagGroup.TimeOfDay, FoodTagGroup.CookingMethod] as const).map(tab => (
               <button
+                type="button"
                 key={tab}
-                onClick={() => setSelectedGroup(tab as any)}
+                onClick={() => { setSelectedGroup(tab); setPage(1); }}
                 className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
                   selectedGroup === tab 
                     ? 'bg-blue-600 text-white shadow-sm' 
@@ -256,6 +261,13 @@ export default function FoodTags() {
                   <td colSpan={5} className="text-center py-12">
                     <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                     <p className="text-slate-500 mt-2 text-sm">Loading tags...</p>
+                  </td>
+                </tr>
+              ) : listError ? (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center">
+                    <p className="text-sm font-medium text-red-700">{listError}</p>
+                    <button type="button" onClick={() => void fetchTags()} className="mt-3 rounded-lg bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100">Retry</button>
                   </td>
                 </tr>
               ) : tags.length === 0 ? (
@@ -300,6 +312,7 @@ export default function FoodTags() {
                     <td style={tdStyle} className="text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button 
+                          type="button"
                           onClick={() => openModal(tag)}
                           className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                           title="Edit Tag"
@@ -307,6 +320,7 @@ export default function FoodTags() {
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button 
+                          type="button"
                           onClick={() => setDeleteTarget(tag)}
                           className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                           title="Delete Tag"
@@ -324,7 +338,7 @@ export default function FoodTags() {
 
         {/* Pagination */}
         {!loading && totalCount > 0 && (
-          <div className="border-t border-gray-200 bg-white px-5 py-4">
+          <div className="bg-white">
             <Pagination
               currentPage={page}
               totalPages={Math.ceil(totalCount / limit)}
@@ -343,9 +357,9 @@ export default function FoodTags() {
         title={editingTag ? 'Edit Food Tag' : 'Create New Food Tag'}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
+          {formError && (
             <div className="p-3 bg-red-50 text-red-700 text-sm border border-red-200 rounded-lg">
-              {error}
+              {formError}
             </div>
           )}
           

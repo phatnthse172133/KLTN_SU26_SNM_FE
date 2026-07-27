@@ -1,10 +1,10 @@
 "use client";
 import {
-  MapPin, Store, Plus, Search, X, LayoutGrid, Map, Tag,
-  Clock, CalendarDays, Grid3x3, ArrowLeft, Edit, Globe, Phone as PhoneIcon, FileText, Trash, Sliders, Settings, Upload
+  MapPin, Store, Plus, Search, LayoutGrid, Map, Tag,
+  Clock, CalendarDays, Grid3x3, ArrowLeft, Edit, Globe, FileText, Trash, Upload
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { adminNightMarketService, NightMarketStatus } from '@/application/features/admin/adminNightMarketService';
+import { adminNightMarketService } from '@/application/features/admin/adminNightMarketService';
 import { adminBoothService } from '@/application/features/admin/adminBoothService';
 import type { Booth, NightMarket } from '@/shared/types';
 import { Pagination } from './components/Pagination';
@@ -12,6 +12,7 @@ import { MapView } from './components/MapView';
 import { MarketLayout } from './components/MarketLayout';
 import { Modal } from './components/Modal';
 import { MapPicker } from './components/MapPicker';
+import { ConfirmDialog } from '@/presentation/components/shared/ConfirmDialog';
 interface NightMarketsProps {
   initialMarketId?: string | null;
 }
@@ -33,16 +34,17 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [boothPage, setBoothPage] = useState(1);
   const [boothSearch, setBoothSearch] = useState('');
-  const [boothStatusFilter, setBoothStatusFilter] = useState<'Active' | 'Suspended' | 'PendingApproval'>('Active');
+  const [boothStatusFilter, setBoothStatusFilter] = useState<'Active' | 'Inactive' | 'Banned'>('Active');
   
   const [selectedBoothDetail, setSelectedBoothDetail] = useState<Booth | null>(null);
   const [marketBooths, setMarketBooths] = useState<Booth[]>([]);
   const [previewDoc, setPreviewDoc] = useState<{ url: string; label: string } | null>(null);
-  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const [hoveredBoothRow, setHoveredBoothRow] = useState<string | null>(null);
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+  const [marketPendingDeletion, setMarketPendingDeletion] = useState<string | null>(null);
+  const [deletingMarket, setDeletingMarket] = useState(false);
 
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const fetchMarkets = async () => {
     try {
       setLoading(true);
@@ -92,7 +94,7 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
   const [editWidth, setEditWidth] = useState('');
   const [editHeight, setEditHeight] = useState('');
   const [editImages, setEditImages] = useState<string[]>([]);
-  const [editStatus, setEditStatus] = useState<number>(NightMarketStatus.Open);
+  // Status is managed via PATCH endpoint, not in edit form
 
   // Map Picker State
   const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
@@ -115,15 +117,11 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
       setEditWidth(String(editMarket.mapWidth || ''));
       setEditHeight(String(editMarket.mapHeight || ''));
       setEditImages(editMarket.thumbnailUrl ? [editMarket.thumbnailUrl] : []);
-      // Map string status from backend to enum for form
-      let statusEnum = NightMarketStatus.Open;
-      if (editMarket.status === 'Draft') statusEnum = NightMarketStatus.Draft;
-      if (editMarket.status === 'Closed') statusEnum = NightMarketStatus.Closed;
-      setEditStatus(statusEnum);
+      // Status is managed via PATCH endpoint, not in edit form
     }
   }, [editMarket]);
 
-  const uniqueCategories = Array.from(new Set(marketsList.map(m => 'Night Market')));
+  const uniqueCategories = Array.from(new Set(marketsList.map(() => 'Night Market')));
 
   const filteredMarkets = marketsList.filter(m => {
     const q = searchQuery.toLowerCase();
@@ -153,14 +151,14 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
 
   const statusBadge = (status: string) => {
     if (status === 'Active') return { background: 'rgba(16,185,129,0.15)', color: '#10B981', border: '1px solid rgba(16,185,129,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '12px', fontWeight: 600, display: 'inline-flex', alignItems: 'center' };
-    if (status === 'Maintenance') return { background: 'rgba(245,158,11,0.15)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '12px', fontWeight: 600, display: 'inline-flex', alignItems: 'center' };
+    if (status === 'Inactive') return { background: 'rgba(245,158,11,0.15)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '12px', fontWeight: 600, display: 'inline-flex', alignItems: 'center' };
     return { background: 'rgba(100,116,139,0.15)', color: '#64748B', border: '1px solid rgba(100,116,139,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '12px', fontWeight: 600, display: 'inline-flex', alignItems: 'center' };
   };
 
   const boothStatusBadge = (status: string) => {
     if (status === 'Active') return { background: 'rgba(16,185,129,0.15)', color: '#10B981', border: '1px solid rgba(16,185,129,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '11px', fontWeight: 600 };
-    if (status === 'Suspended') return { background: 'rgba(239,68,68,0.15)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '11px', fontWeight: 600 };
-    return { background: 'rgba(245,158,11,0.15)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '11px', fontWeight: 600 };
+    if (status === 'Banned') return { background: 'rgba(239,68,68,0.15)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '11px', fontWeight: 600 };
+    return { background: 'rgba(100,116,139,0.15)', color: '#64748B', border: '1px solid rgba(100,116,139,0.25)', borderRadius: '9999px', padding: '2px 10px', fontSize: '11px', fontWeight: 600 };
   };
 
   const inputStyle: React.CSSProperties = {
@@ -215,8 +213,7 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
         boundaryHeightMeters: Number(newHeight) || 120,
         openingHours: newOpenHour ? newOpenHour + ":00" : null,
         closingHours: newCloseHour ? newCloseHour + ":00" : null,
-        thumbnailUrl: newImages[0] || null,
-        status: NightMarketStatus.Open
+        thumbnailUrl: newImages[0] || null
       });
       setShowCreateDialog(false);
       fetchMarkets();
@@ -239,8 +236,7 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
         boundaryHeightMeters: Number(editHeight) || editMarket.mapHeight || 120,
         openingHours: editOpenHour ? editOpenHour + (editOpenHour.length === 5 ? ":00" : "") : null,
         closingHours: editCloseHour ? editCloseHour + (editCloseHour.length === 5 ? ":00" : "") : null,
-        thumbnailUrl: editImages[0] || editMarket.thumbnailUrl || null,
-        status: editStatus
+        thumbnailUrl: editImages[0] || editMarket.thumbnailUrl || null
       });
       setEditMarket(null);
       fetchMarkets();
@@ -248,12 +244,16 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
   };
 
   const handleDeleteMarket = async (id: string) => {
-    if (confirm('Are you sure you want to delete this night market?')) {
-      try {
-        await adminNightMarketService.deleteNightMarket(id);
-        if (selectedMarket === id) setSelectedMarket(null);
-        fetchMarkets();
-      } catch(e) { console.error(e); }
+    setDeletingMarket(true);
+    try {
+      await adminNightMarketService.deleteNightMarket(id);
+      if (selectedMarket === id) setSelectedMarket(null);
+      setMarketPendingDeletion(null);
+      await fetchMarkets();
+    } catch(e) {
+      console.error(e);
+    } finally {
+      setDeletingMarket(false);
     }
   };
 
@@ -307,7 +307,6 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
               <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }} style={selectStyle}>
                 <option value="all">All Status</option>
                 <option value="Active">Active</option>
-                <option value="Maintenance">Maintenance</option>
                 <option value="Inactive">Inactive</option>
               </select>
               <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
@@ -488,7 +487,7 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
                       <Edit style={{ width: '1rem', height: '1rem' }} /> Edit Market
                     </button>
                     <button
-                      onClick={() => handleDeleteMarket(market.id)}
+                      onClick={() => setMarketPendingDeletion(market.id)}
                       style={{ padding: '0.5rem 1rem', border: '1px solid #FEE2E2', color: '#EF4444', background: '#FEF2F2', borderRadius: '0.5rem', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
                     >
                       <Trash style={{ width: '1rem', height: '1rem' }} /> Delete Market
@@ -517,7 +516,7 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
               {/* Status Segmented Control Tabs */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '0.75rem' }}>
                 <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', borderBottom: '1px solid #F1F5F9', paddingBottom: '0.75rem' }}>
-                  {(['Active', 'Suspended', 'PendingApproval'] as const).map(status => {
+                  {(['Active', 'Inactive', 'Banned'] as const).map(status => {
                     const count = marketBooths.filter(b => b.nightMarketId === selectedMarket && b.status === status).length;
                     const active = boothStatusFilter === status;
                     return (
@@ -541,7 +540,7 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
                           whiteSpace: 'nowrap'
                         }}
                       >
-                        {status === 'PendingApproval' ? 'Pending' : status}
+                        {status}
                         <span style={{
                           fontSize: '10px',
                           padding: '1px 5px',
@@ -880,14 +879,6 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
                 <input type="number" value={editHeight} onChange={e => setEditHeight(e.target.value)} style={inputStyle} />
               </div>
             </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#475569', marginBottom: '0.375rem' }}>Status</label>
-              <select value={editStatus} onChange={e => setEditStatus(e.target.value as any)} style={{ ...selectStyle, width: '100%' }}>
-                <option value="Active">Active</option>
-                <option value="Maintenance">Maintenance</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-            </div>
             <div style={{ display: 'flex', gap: '0.75rem', paddingTop: '0.5rem' }}>
               <button onClick={() => setEditMarket(null)} style={{ flex: 1, padding: '0.5rem 1rem', background: '#FFFFFF', border: '1px solid #E2E8F0', color: '#111827', borderRadius: '0.5rem', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
               <button onClick={handleEditMarket} style={{ flex: 1, padding: '0.5rem 1rem', background: '#4F46E5', color: 'white', borderRadius: '0.5rem', fontWeight: 500, border: 'none', cursor: 'pointer' }}>Save Changes</button>
@@ -906,13 +897,6 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
             borderRadius: '0.75rem',
             padding: '1rem',
           };
-          const docEntries = [
-            b.documents?.businessLicense ? { label: 'Business License', doc: b.documents.businessLicense } : null,
-            b.documents?.foodSafety ? { label: 'Food Safety Certificate', doc: b.documents.foodSafety } : null,
-            b.documents?.healthPermit ? { label: 'Health Permit', doc: b.documents.healthPermit } : null,
-            b.documents?.insurance ? { label: 'Liability Insurance', doc: b.documents.insurance } : null,
-          ].filter(Boolean) as { label: string; doc: { name: string; verified: boolean; uploadedAt: string } }[];
-
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               {/* Row 1: name + badges */}
@@ -1157,6 +1141,18 @@ export function NightMarkets({ initialMarketId }: NightMarketsProps) {
         }}
         initialLat={mapPickerTarget === 'edit' ? Number(editLat) || 10.7721 : Number(newLat) || 10.7721}
         initialLng={mapPickerTarget === 'edit' ? Number(editLng) || 106.6980 : Number(newLng) || 106.6980}
+      />
+      <ConfirmDialog
+        open={marketPendingDeletion !== null}
+        title="Delete night market?"
+        message="This night market will no longer be available. Existing records will be retained for audit purposes."
+        confirmLabel="Delete Market"
+        confirmStyle="danger"
+        loading={deletingMarket}
+        onCancel={() => setMarketPendingDeletion(null)}
+        onConfirm={() => {
+          if (marketPendingDeletion) void handleDeleteMarket(marketPendingDeletion);
+        }}
       />
     </div>
   );

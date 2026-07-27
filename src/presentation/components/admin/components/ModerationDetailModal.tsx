@@ -398,7 +398,9 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
 
 
 
-  const isSuspended = status === 'Suspended';
+  const isSuspended = isMarket && status === 'Suspended';
+
+  const isBanned = !isMarket && status === 'Banned';
 
 
 
@@ -407,28 +409,13 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
   const BOOTH_BADGE: Record<string, string> = {
 
 
-    PendingApproval: 'bg-amber-100 text-amber-700',
+    Active:   'bg-emerald-100 text-emerald-700',
 
 
-    Active:          'bg-emerald-100 text-emerald-700',
+    Inactive: 'bg-gray-100 text-gray-600',
 
 
-    Inactive:        'bg-gray-100 text-gray-600',
-
-
-    Suspended:       'bg-red-100 text-red-700',
-
-
-    Closed:          'bg-slate-100 text-slate-600',
-
-
-  };
-
-
-  const BOOTH_LABEL: Record<string, string> = {
-
-
-    PendingApproval: 'Pending Approval',
+    Banned:   'bg-red-100 text-red-700',
 
 
   };
@@ -437,7 +424,7 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
 
 
 
-  const canModerateStatus = !isMarket && (status === 'Active' || status === 'Suspended');
+  const canModerateStatus = !isMarket && status != null;
 
 
 
@@ -455,13 +442,7 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
 
 
 
-  const statusLabel = isMarket
-
-
-    ? status
-
-
-    : (BOOTH_LABEL[status ?? ''] ?? status);
+  const statusLabel = status;
 
 
 
@@ -495,6 +476,12 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
 
 
   const complaints = (isMarket ? mDetail?.recentComplaints : bDetail?.recentComplaints) || [];
+
+  const banRecord = !isMarket
+    ? (bDetail?.recentHistory?.newStatus === 'Banned'
+        ? bDetail.recentHistory
+        : history.find(h => h.newStatus === 'Banned'))
+    : undefined;
 
 
 
@@ -795,6 +782,51 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
 
 
                         <p className="text-red-700 text-sm mt-1">This {targetType.toLowerCase()} is currently suspended and restricted from normal operations.</p>
+
+
+                      </div>
+
+
+                    </div>
+
+
+                  )}
+
+
+                  {isBanned && (
+
+
+                    <div className="bg-red-50 rounded-xl p-4 flex gap-3">
+
+
+                      <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+
+
+                      <div>
+
+
+                        <h4 className="text-red-800 font-semibold text-sm">Booth Banned</h4>
+
+
+                        <p className="text-red-700 text-sm mt-1">This booth has been banned by the platform.</p>
+
+
+                        {banRecord && (
+
+
+                          <div className="mt-3 space-y-1">
+
+
+                            <p className="text-red-800 text-sm"><span className="font-semibold">Ban Reason:</span> {banRecord.reason}</p>
+
+
+                            <p className="text-red-700 text-xs">Banned by <span className="font-medium">{banRecord.adminName || 'Admin'}</span> on {formatDate(banRecord.createdAt)}</p>
+
+
+                          </div>
+
+
+                        )}
 
 
                       </div>
@@ -1265,7 +1297,7 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
                           <div className="w-10 h-10 shrink-0 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center z-10">
 
 
-                            {h.newStatus === 'Suspended' ? <Lock className="w-4 h-4 text-slate-400" /> : <Unlock className="w-4 h-4 text-slate-400" />}
+                            {h.newStatus === 'Suspended' || h.newStatus === 'Banned' ? <Lock className="w-4 h-4 text-slate-400" /> : <Unlock className="w-4 h-4 text-slate-400" />}
 
 
                           </div>
@@ -1280,7 +1312,7 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
                               <span className="font-semibold text-sm text-slate-900">
 
 
-                                Changed status to <span className={h.newStatus === 'Suspended' ? 'text-red-600' : 'text-emerald-600'}>{h.newStatus}</span>
+                                Changed status to <span className={h.newStatus === 'Suspended' || h.newStatus === 'Banned' ? 'text-red-600' : 'text-emerald-600'}>{h.newStatus}</span>
 
 
                               </span>
@@ -1349,7 +1381,7 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
           <div className="text-sm font-medium text-slate-600">
 
 
-            Current Status: <span className={`font-bold ${isSuspended ? 'text-red-600' : status === 'Active' ? 'text-emerald-600' : 'text-slate-900'}`}>{statusLabel || 'Unknown'}</span>
+            Current Status: <span className={`font-bold ${isSuspended || isBanned ? 'text-red-600' : status === 'Active' ? 'text-emerald-600' : 'text-slate-900'}`}>{statusLabel || 'Unknown'}</span>
 
 
           </div>
@@ -1385,7 +1417,7 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
                 className={`flex-1 sm:flex-none px-4 py-2 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
 
 
-                  isSuspended
+                  isSuspended || isBanned
 
 
                     ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
@@ -1400,7 +1432,7 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
               >
 
 
-                {isSuspended ? `Restore ${targetType}` : `Suspend ${targetType}`}
+                {isMarket ? (isSuspended ? `Restore ${targetType}` : `Suspend ${targetType}`) : (isBanned ? 'Restore Booth' : 'Ban Booth')}
 
 
               </button>

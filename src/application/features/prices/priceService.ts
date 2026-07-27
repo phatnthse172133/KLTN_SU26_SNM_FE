@@ -6,14 +6,24 @@ export interface PriceResponse {
   foodItemId?: string;
   packageId?: string;
   price: number;
+  durationDays?: number;
   startDate?: string | null;
   endDate?: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
+export interface PublicPackagePricingOption {
+  durationDays: number;
+  basePrice: number;
+  effectivePrice: number;
+  hasPromotion: boolean;
+  promotionEndDate?: string | null;
+}
+
 export interface PricePayload {
   price: number;
+  durationDays?: number;
   startDate?: string | null;
   endDate?: string | null;
 }
@@ -33,6 +43,9 @@ export const priceService = {
   },
   getPackagePrices: async (packageId: string) => {
     return apiClient.get<BaseResponse<PaginationResponse<PriceResponse>>>(`/admin/packages/${packageId}/prices`);
+  },
+  getPublicPackagePrices: async (packageId: string) => {
+    return apiClient.get<BaseResponse<PublicPackagePricingOption[]>>(`/packages/${packageId}/prices`);
   },
   createPackagePrice: async (packageId: string, data: PricePayload) => {
     return apiClient.post<BaseResponse<PriceResponse>>(`/admin/packages/${packageId}/prices`, data);

@@ -9,18 +9,18 @@ import type { BaseResponse, PaginationResponse, NightMarket } from "@/shared/typ
 /**
  * Enum mirror of backend DomainLayer.Enums.GeneralEnum.NightMarketStatus
  * Must stay in sync with backend values.
+ * Suspension is handled by ModerationStatus (separate field).
  */
 export enum NightMarketStatus {
-  Draft = 0,
-  Upcoming = 1,
-  Open = 2,
-  Closed = 3,
-  Cancelled = 4,
+  Active = 1,
+  Inactive = 2,
 }
 
 /**
  * Request body for creating/updating a Night Market.
  * Backend: CreateNightMarketRequest / UpdateNightMarketRequest
+ * Note: Status is NOT sent in create/update — it defaults to Inactive on create,
+ * and is changed via PATCH /night-markets/{id}/status by the market owner.
  */
 export interface SaveNightMarketPayload {
   name: string;
@@ -33,7 +33,6 @@ export interface SaveNightMarketPayload {
   openingHours?: string | null;
   closingHours?: string | null;
   thumbnailUrl?: string | null;
-  status: NightMarketStatus;
 }
 
 export const adminNightMarketService = {
@@ -76,6 +75,18 @@ export const adminNightMarketService = {
    * Backend: DELETE /api/night-markets/{id}
    */
   deleteNightMarket: async (id: string) => {
-    return apiClient.delete<BaseResponse<any>>(`/night-markets/${id}`);
+    return apiClient.delete<BaseResponse<void>>(`/night-markets/${id}`);
+  },
+
+  getDeletionImpact: async (id: string) => {
+    return apiClient.get<BaseResponse<DeletionImpactResponse>>(`/night-markets/${id}/deletion-impact`);
   },
 };
+
+export interface DeletionImpactResponse {
+  activeBooths: number;
+  openOrders: number;
+  pendingRegistrations: number;
+  layouts: number;
+  zones: number;
+}

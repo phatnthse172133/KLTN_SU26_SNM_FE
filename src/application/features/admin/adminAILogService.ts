@@ -31,6 +31,21 @@ export interface AILogListParams {
   type?: AIRecommendationType;
 }
 
+interface AdminAILogListResponse {
+  code: number;
+  message: string;
+  data: {
+    items: AILog[];
+    totalCount: number;
+  };
+}
+
+interface AdminAILogDetailResponse {
+  code: number;
+  message: string;
+  data: AILog;
+}
+
 export const adminAILogService = {
   getLogs: async (params: AILogListParams = {}) => {
     const qp = new URLSearchParams();
@@ -39,12 +54,12 @@ export const adminAILogService = {
     if (params.search) qp.append('Search', params.search);
     if (params.type !== undefined) qp.append('Type', params.type.toString());
     
-    const response = await apiClient.get<any>(`/admin/ai-logs?${qp.toString()}`);
+    const response = await apiClient.get<AdminAILogListResponse>(`/admin/ai-logs?${qp.toString()}`);
     return response.data;
   },
 
   getLogById: async (id: string) => {
-    const response = await apiClient.get<any>(`/admin/ai-logs/${id}`);
+    const response = await apiClient.get<AdminAILogDetailResponse>(`/admin/ai-logs/${id}`);
     return response.data;
   }
 };

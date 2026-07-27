@@ -33,9 +33,9 @@ export function MarketModerationGrid(props: MarketModerationGridProps) {
   } = props;
 
   const statusBadge = (status: string) => {
-    if (status === 'Active' || status === 'Open') return "bg-emerald-100 text-emerald-700";
-    if (status === 'Upcoming' || status === 'Draft') return "bg-amber-100 text-amber-700";
-    if (status === 'Suspended' || status === 'Cancelled') return "bg-red-100 text-red-700";
+    if (status === 'Active') return "bg-emerald-100 text-emerald-700";
+    if (status === 'Inactive') return "bg-amber-100 text-amber-700";
+    if (status === 'Suspended') return "bg-red-100 text-red-700";
     return "bg-slate-100 text-slate-600";
   };
 
@@ -68,11 +68,8 @@ export function MarketModerationGrid(props: MarketModerationGridProps) {
         <div className="flex items-center gap-3">
           <select value={lifecycleFilter} onChange={(e) => { setLifecycleFilter(e.target.value); setPage(1); }} className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-700">
             <option value="">All Lifecycle</option>
-            <option value="Draft">Draft</option>
-            <option value="Upcoming">Upcoming</option>
-            <option value="Open">Open</option>
-            <option value="Closed">Closed</option>
-            <option value="Cancelled">Cancelled</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
           </select>
           <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-700">
             <option value="">All Moderation</option>
@@ -130,6 +127,7 @@ export function MarketModerationGrid(props: MarketModerationGridProps) {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
                 {items.map((m) => {
                   const isSuspended = m.moderationStatus === 'Suspended';
+                  const displayStatus = isSuspended ? 'Suspended' : m.lifecycleStatus;
                   return (
                     <div
                       key={m.id}
@@ -144,12 +142,9 @@ export function MarketModerationGrid(props: MarketModerationGridProps) {
                             <MapPin className="w-8 h-8 text-slate-300" />
                           </div>
                         )}
-                        <div className="absolute top-3 inset-x-3 flex justify-between items-start pointer-events-none">
-                          <span className={`px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-md backdrop-blur-md ${statusBadge(m.lifecycleStatus)}`}>
-                            {m.lifecycleStatus}
-                          </span>
-                          <span className={`px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-md backdrop-blur-md shadow-sm ${statusBadge(m.moderationStatus)}`}>
-                            {m.moderationStatus}
+                        <div className="absolute top-3 left-3 pointer-events-none">
+                          <span className={`px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-md backdrop-blur-md shadow-sm ${statusBadge(displayStatus)}`}>
+                            {displayStatus}
                           </span>
                         </div>
                       </div>

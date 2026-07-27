@@ -25,6 +25,7 @@ export function Modal({ isOpen, onClose, title, children, size = 'lg' }: ModalPr
       className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
       onClick={onClose}
+      role="presentation"
     >
       <div
         className={`rounded-2xl w-full ${sizeClasses[size]} max-h-[90vh] flex flex-col`}
@@ -35,6 +36,9 @@ export function Modal({ isOpen, onClose, title, children, size = 'lg' }: ModalPr
           animation: 'fadeInUp 0.2s ease both',
         }}
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
       >
         {/* Header */}
         <div
@@ -43,14 +47,16 @@ export function Modal({ isOpen, onClose, title, children, size = 'lg' }: ModalPr
         >
           <h3 style={{ color: '#111827', fontWeight: 700, fontSize: '1.125rem' }}>{title}</h3>
           <button
+            type="button"
+            aria-label="Close dialog"
             onClick={onClose}
             className="flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-200"
             style={{ color: '#64748B', background: 'transparent' }}
-            onMouseEnter={(e: any) => {
+            onMouseEnter={(e) => {
               (e.currentTarget as HTMLElement).style.background = '#F3F4F6';
               (e.currentTarget as HTMLElement).style.color = '#111827';
             }}
-            onMouseLeave={(e: any) => {
+            onMouseLeave={(e) => {
               (e.currentTarget as HTMLElement).style.background = 'transparent';
               (e.currentTarget as HTMLElement).style.color = '#64748B';
             }}

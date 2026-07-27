@@ -13,6 +13,7 @@ import {
   AIRecommendationType 
 } from '@/application/features/admin/adminAILogService';
 import { format } from 'date-fns';
+import { getErrorMessage } from '@/shared/errors/errorMapper';
 
 const cardStyle: React.CSSProperties = {
   background: '#FFFFFF',
@@ -50,6 +51,7 @@ export default function AILogs() {
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
   const [selectedType, setSelectedType] = useState<AIRecommendationType | 'All'>('All');
+  const [error, setError] = useState<string | null>(null);
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -66,25 +68,26 @@ export default function AILogs() {
   const fetchLogs = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
       const data = await adminAILogService.getLogs({
         page,
         limit,
         search: debouncedSearch,
         type: selectedType === 'All' ? undefined : selectedType
       });
-      if (data?.data) {
-        setLogs(data.data.items || []);
-        setTotalCount(data.data.totalCount || 0);
-      }
-    } catch (error) {
-      console.error('Failed to fetch AI logs', error);
+      setLogs(data.items || []);
+      setTotalCount(data.totalCount || 0);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err));
+      setLogs([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
   }, [page, limit, debouncedSearch, selectedType]);
 
   useEffect(() => {
-    fetchLogs();
+    void Promise.resolve().then(() => fetchLogs());
   }, [fetchLogs]);
 
   const openModal = (log: AILog) => {
@@ -138,6 +141,7 @@ export default function AILogs() {
           <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 hide-scrollbar">
             {['All', AIRecommendationType.General, AIRecommendationType.ByBudget, AIRecommendationType.ByFoodTags, AIRecommendationType.ByCombo].map(tab => (
               <button
+                type="button"
                 key={tab}
                 onClick={() => setSelectedType(tab as AIRecommendationType | 'All')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
@@ -170,6 +174,13 @@ export default function AILogs() {
                   <td colSpan={5} className="text-center py-12">
                     <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                     <p className="text-slate-500 mt-2 text-sm">Loading logs...</p>
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center">
+                    <p className="text-sm font-medium text-red-700">{error}</p>
+                    <button type="button" onClick={() => void fetchLogs()} className="mt-3 rounded-lg bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100">Retry</button>
                   </td>
                 </tr>
               ) : logs.length === 0 ? (
@@ -220,6 +231,7 @@ export default function AILogs() {
                     </td>
                     <td style={tdStyle} className="text-right">
                       <button 
+                        type="button"
                         onClick={() => openModal(log)}
                         className="px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors inline-flex items-center gap-1.5"
                       >
@@ -236,7 +248,7 @@ export default function AILogs() {
 
         {/* Pagination */}
         {!loading && totalCount > 0 && (
-          <div className="border-t border-gray-200 bg-white px-5 py-4">
+          <div className="bg-white">
             <Pagination
               currentPage={page}
               totalPages={Math.ceil(totalCount / limit)}
