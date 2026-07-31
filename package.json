@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "check:english": "node scripts/check-english.mjs",
+    "check:errors": "node scripts/check-errors.mjs",
+    "test:scanner": "node scripts/check-errors.test.mjs",
+    "test:contract": "node scripts/runtime-acceptance.mjs",
+    "verify": "npm run check:english && npm run check:errors && npx tsc --noEmit && npx eslint src scripts && npm run test:scanner && npm run test:contract && npm run build"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
@@ -48,7 +53,7 @@
     "next-themes": "^0.4.6",
     "postcss": "^8.5.16",
     "react": "19.2.4",
-    "react-day-picker": "^8.10.1",
+    "react-day-picker": "^10.0.1",
     "react-dom": "19.2.4",
     "react-hook-form": "^7.80.0",
     "react-resizable-panels": "^4.12.0",

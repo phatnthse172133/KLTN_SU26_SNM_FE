@@ -58,7 +58,7 @@ export default function AISettings() {
   }, []);
 
   useEffect(() => {
-    fetchSettings();
+    void Promise.resolve().then(fetchSettings);
   }, [fetchSettings]);
 
   const handleSave = async () => {

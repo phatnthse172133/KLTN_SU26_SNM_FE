@@ -54,14 +54,14 @@ export function LoginRegister() {
         return;
       }
 
-      const response = await authService.registerBoothOwner({
+      await authService.registerBoothOwner({
         userName,
         fullName,
         email,
         password,
         confirmPassword,
       });
-      setMessage(response.message || "Registration submitted. Please verify your email before signing in.");
+      setMessage("Registration submitted. Please verify your email before signing in.");
       setIsLogin(true);
       setPassword("");
       setConfirmPassword("");

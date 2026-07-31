@@ -27,7 +27,7 @@ export function KPICard({ title, value, icon: Icon, trend, color = 'blue' }: KPI
           <p className="text-3xl font-semibold text-foreground">{value}</p>
           {trend && (
             <p className={`text-xs mt-2 ${trend.isPositive ? 'text-green-600' : 'text-red-600'}`}>
-              {trend.isPositive ? '↑' : '↓'} {trend.value}
+              {trend.isPositive ? 'â†‘' : 'â†“'} {trend.value}
             </p>
           )}
         </div>

@@ -1,40 +1,35 @@
-const getHeaders = (customHeaders?: HeadersInit) => {
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  return {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...customHeaders,
-  };
-};
+import { mapApiError, mapNetworkError, mapTimeoutError, isAppError } from "@/shared/errors/errorMapper";
+import { errorMessages } from "@/shared/errors/errorMessages";
+import { createAppError } from "@/shared/errors/AppError";
+import { DEFAULT_TIMEOUT_MS, safeJsonParse, serializeBody, buildAuthHeaders } from "./apiInternals.mjs";
+import { createRequest } from "./requestCore.mjs";
 
 export const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5282/api";
 
-const handleResponse = async <T>(res: Response): Promise<T> => {
-  if (res.status === 204) {
-    return undefined as T;
+const onUnauthorized = () => {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem("token");
+  localStorage.removeItem("refreshToken");
+  localStorage.removeItem("user");
+  if (window.location.pathname !== "/login") {
+    window.location.replace("/login");
   }
-
-  const contentType = res.headers.get("content-type");
-  const rawBody = await res.text();
-  const body = contentType?.includes("application/json") && rawBody
-    ? JSON.parse(rawBody)
-    : rawBody;
-
-  if (!res.ok) {
-    const message = typeof body === "object" && body
-      ? String(
-          (body as { message?: string; Message?: string; title?: string; error?: string }).message
-          ?? (body as { Message?: string }).Message
-          ?? (body as { title?: string }).title
-          ?? (body as { error?: string }).error
-          ?? `HTTP error! status: ${res.status}`
-        )
-      : `HTTP error! status: ${res.status}`;
-    throw new Error(message);
-  }
-
-  return body as T;
 };
+
+const request = createRequest({
+  fetchFn: fetch,
+  baseUrl: BASE_URL,
+  timeoutMs: DEFAULT_TIMEOUT_MS,
+  safeJsonParse,
+  buildAuthHeaders,
+  mapApiError,
+  mapTimeoutError,
+  mapNetworkError,
+  createAppError,
+  errorMessages,
+  getToken: () => (typeof window !== "undefined" ? localStorage.getItem("token") : null),
+  onUnauthorized,
+});
 
 export const buildQuery = (params: Record<string, string | number | boolean | null | undefined>) => {
   const searchParams = new URLSearchParams();
@@ -47,48 +42,22 @@ export const buildQuery = (params: Record<string, string | number | boolean | nu
   return query ? `?${query}` : "";
 };
 
+export { isAppError };
+
 export const apiClient = {
   get: async <T>(url: string, options?: RequestInit): Promise<T> => {
-    const res = await fetch(`${BASE_URL}${url}`, { 
-      method: "GET", 
-      ...options,
-      headers: getHeaders(options?.headers) 
-    });
-    return handleResponse<T>(res);
+    return request(url, { method: "GET", ...options }) as Promise<T>;
   },
   post: async <T>(url: string, body: unknown, options?: RequestInit): Promise<T> => {
-    const res = await fetch(`${BASE_URL}${url}`, {
-      method: "POST",
-      body: JSON.stringify(body),
-      ...options,
-      headers: getHeaders(options?.headers),
-    });
-    return handleResponse<T>(res);
+    return request(url, { method: "POST", body: serializeBody(body), ...options }) as Promise<T>;
   },
   put: async <T>(url: string, body: unknown, options?: RequestInit): Promise<T> => {
-    const res = await fetch(`${BASE_URL}${url}`, {
-      method: "PUT",
-      body: JSON.stringify(body),
-      ...options,
-      headers: getHeaders(options?.headers),
-    });
-    return handleResponse<T>(res);
+    return request(url, { method: "PUT", body: serializeBody(body), ...options }) as Promise<T>;
   },
   patch: async <T>(url: string, body: unknown, options?: RequestInit): Promise<T> => {
-    const res = await fetch(`${BASE_URL}${url}`, {
-      method: "PATCH",
-      body: JSON.stringify(body),
-      ...options,
-      headers: getHeaders(options?.headers),
-    });
-    return handleResponse<T>(res);
+    return request(url, { method: "PATCH", body: serializeBody(body), ...options }) as Promise<T>;
   },
   delete: async <T>(url: string, options?: RequestInit): Promise<T> => {
-    const res = await fetch(`${BASE_URL}${url}`, { 
-      method: "DELETE", 
-      ...options,
-      headers: getHeaders(options?.headers),
-    });
-    return handleResponse<T>(res);
+    return request(url, { method: "DELETE", ...options }) as Promise<T>;
   },
 };

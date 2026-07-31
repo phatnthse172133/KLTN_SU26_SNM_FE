@@ -109,8 +109,8 @@ function ProfileModal({ onClose, initialTab = "profile" }: { onClose: () => void
       setEditing(false);
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 2500);
-    } catch (error) {
-      setProfileError(error instanceof Error ? error.message : "Failed to update profile.");
+    } catch {
+      setProfileError("We couldn't update your profile. Please review your information and try again.");
     }
   };
 
@@ -124,8 +124,8 @@ function ProfileModal({ onClose, initialTab = "profile" }: { onClose: () => void
       setCurrentPw(""); setNewPw(""); setConfirmPw("");
       setPwSaved(true);
       setTimeout(() => setPwSaved(false), 2500);
-    } catch (error) {
-      setPwError(error instanceof Error ? error.message : "Failed to update password.");
+    } catch {
+      setPwError("We couldn't update your password. Please check your current password and try again.");
     }
   };
 
