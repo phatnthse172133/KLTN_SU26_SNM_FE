@@ -11,10 +11,12 @@
     "check:errors": "node scripts/check-errors.mjs",
     "test:scanner": "node scripts/check-errors.test.mjs",
     "test:contract": "node scripts/runtime-acceptance.mjs",
+    "test:unit": "vitest run",
     "verify": "npm run check:english && npm run check:errors && npx tsc --noEmit && npx eslint src scripts && npm run test:scanner && npm run test:contract && npm run build"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
+    "@microsoft/signalr": "^10.0.0",
     "@radix-ui/react-accordion": "^1.2.14",
     "@radix-ui/react-alert-dialog": "^1.1.17",
     "@radix-ui/react-aspect-ratio": "^1.1.10",
@@ -66,11 +68,15 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
-    "typescript": "^5"
+    "jsdom": "^25.0.1",
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }

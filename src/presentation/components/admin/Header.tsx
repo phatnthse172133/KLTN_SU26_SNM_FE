@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from 'react';
-import { Search, ChevronDown, User, LogOut, Mail, Shield } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Search, ChevronDown, User, LogOut, Mail, Shield, Bell } from 'lucide-react';
 import { useAuth } from '@/application/context/AuthContext';
+import { useNotifications } from '@/application/context/NotificationContext';
 
 const getInitials = (name?: string | null) => {
   if (!name) return "U";
@@ -17,7 +18,18 @@ export function Header() {
   const [searchFocused, setSearchFocused] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [showBell, setShowBell] = useState(false);
   const { user, logout } = useAuth();
+  const { unreadCount, recentNotifications, markAsRead } = useNotifications();
+  const bellRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) setShowBell(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   return (
     <header
@@ -53,6 +65,56 @@ export function Header() {
 
       {/* Right side */}
       <div className="flex items-center gap-3">
+        {/* Notification bell */}
+        <div className="relative" ref={bellRef}>
+          <button
+            type="button"
+            onClick={() => setShowBell((v) => !v)}
+            className="relative flex items-center justify-center w-9 h-9 rounded-lg transition-all hover:bg-gray-50"
+            style={{ color: '#475569' }}
+          >
+            <Bell className="w-5 h-5" />
+            {unreadCount > 0 && (
+              <span
+                className="absolute top-0 right-0 min-w-[16px] h-[16px] flex items-center justify-center text-[10px] font-bold text-white rounded-full"
+                style={{ background: '#EF4444', border: '2px solid #FFFFFF' }}
+              >
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+          {showBell && (
+            <div
+              className="absolute right-0 mt-2 w-80 rounded-xl overflow-hidden"
+              style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', boxShadow: '0 18px 48px rgba(15,23,42,0.16)', zIndex: 60 }}
+            >
+              <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid #F1F5F9' }}>
+                <h3 className="text-sm font-bold" style={{ color: '#111827' }}>Notifications</h3>
+                {unreadCount > 0 && (
+                  <span className="text-xs font-medium" style={{ color: '#64748B' }}>{unreadCount} unread</span>
+                )}
+              </div>
+              <div className="max-h-80 overflow-y-auto">
+                {recentNotifications.length === 0 && (
+                  <div className="px-4 py-6 text-center text-sm" style={{ color: '#94A3B8' }}>No notifications</div>
+                )}
+                {recentNotifications.map((n) => (
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() => { if (!n.isRead) void markAsRead(n.id); }}
+                    className="w-full text-left px-4 py-3 transition-colors hover:bg-gray-50"
+                    style={{ borderBottom: '1px solid #F8FAFC', background: n.isRead ? 'transparent' : 'rgba(37,99,235,0.03)' }}
+                  >
+                    <p className="text-sm font-medium" style={{ color: n.isRead ? '#475569' : '#111827', fontWeight: n.isRead ? 400 : 600 }}>{n.title}</p>
+                    <p className="text-xs mt-0.5 break-words" style={{ color: '#64748B' }}>{n.content}</p>
+                    <p className="text-[10px] mt-1" style={{ color: '#94A3B8' }}>{new Date(n.createdAt).toLocaleString()}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* User menu */}
         <div className="relative">
