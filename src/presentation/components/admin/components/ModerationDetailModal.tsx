@@ -389,7 +389,16 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
   const owner = isMarket ? mDetail?.marketOwnerName : bDetail?.boothOwnerName;
 
 
-  const status = isMarket ? mDetail?.moderationStatus : bDetail?.status;
+  const moderationStatus = isMarket ? mDetail?.moderationStatus : undefined;
+
+
+  const status = isMarket
+
+
+    ? (moderationStatus === 'Suspended' ? 'Suspended' : mDetail?.lifecycleStatus)
+
+
+    : bDetail?.status;
 
 
   const targetName = name || 'Target';
@@ -421,6 +430,21 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
   };
 
 
+  const MARKET_BADGE: Record<string, string> = {
+
+
+    Active: 'bg-emerald-100 text-emerald-700',
+
+
+    Inactive: 'bg-amber-100 text-amber-700',
+
+
+    Suspended: 'bg-red-100 text-red-700',
+
+
+  };
+
+
 
 
 
@@ -433,7 +457,7 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
   const badgeClass = isMarket
 
 
-    ? (isSuspended ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700')
+    ? (MARKET_BADGE[status ?? ''] ?? 'bg-gray-100 text-gray-600')
 
 
     : (BOOTH_BADGE[status ?? ''] ?? 'bg-gray-100 text-gray-600');
@@ -580,7 +604,7 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
 
 
 
-        <div className="flex px-6 border-b border-slate-100 bg-white overflow-x-auto hide-scrollbar" role="tablist">
+        <div className="flex px-8 border-b border-slate-200 bg-white shadow-sm overflow-x-auto hide-scrollbar shrink-0 z-10" role="tablist">
 
 
           <button
@@ -679,7 +703,7 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
 
 
 
-        <div className="px-8 py-6 max-h-[60vh] overflow-y-auto flex-1 bg-white">
+        <div className="px-8 py-6 overflow-y-auto flex-1 bg-white min-h-0">
 
 
           {isLoading ? (
@@ -858,6 +882,7 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
 
                           <InfoItem icon={Clock3} label="Operating Hours" value={mDetail.openingHours && mDetail.closingHours ? `${mDetail.openingHours} - ${mDetail.closingHours}` : 'Not available'} />
                           <InfoItem icon={Store} label="Total Booths" value={mDetail.totalBooths != null ? String(mDetail.totalBooths) : '0'} />
+                          <InfoItem icon={Store} label="Available Booths" value={mDetail.availableBooths != null ? String(mDetail.availableBooths) : '0'} />
 
 
                           <InfoItem icon={UserRound} label="Market Owner" value={mDetail.marketOwnerName?.trim() || 'Not assigned'} />
@@ -1375,13 +1400,22 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
         {/* Footer */}
 
 
-        <div className="px-8 py-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between shrink-0 gap-4">
+        <div className="px-8 py-4 border-t border-slate-200 bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] flex flex-col sm:flex-row items-center justify-between shrink-0 z-10 gap-4">
 
 
           <div className="text-sm font-medium text-slate-600">
 
 
-            Current Status: <span className={`font-bold ${isSuspended || isBanned ? 'text-red-600' : status === 'Active' ? 'text-emerald-600' : 'text-slate-900'}`}>{statusLabel || 'Unknown'}</span>
+            {isMarket ? 'Market Status' : 'Booth Status'}: <span className={`font-bold ${isSuspended || isBanned ? 'text-red-600' : status === 'Active' ? 'text-emerald-600' : status === 'Inactive' ? 'text-amber-600' : 'text-slate-900'}`}>{statusLabel || 'Unknown'}</span>
+
+
+            {isMarket && moderationStatus && (
+
+
+              <span className="ml-3 text-slate-500">Platform Moderation: <span className={`font-bold ${moderationStatus === 'Suspended' ? 'text-red-600' : 'text-emerald-600'}`}>{moderationStatus}</span></span>
+
+
+            )}
 
 
           </div>

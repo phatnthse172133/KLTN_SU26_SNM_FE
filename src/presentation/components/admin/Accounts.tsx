@@ -1,12 +1,15 @@
 "use client";
 
-import { Eye, Ban, CheckCircle, Mail, Phone, Calendar, Store, MapPin, ArrowLeft, DollarSign, FileText, RotateCw, Loader2 } from 'lucide-react';
+import { Eye, Ban, CheckCircle, Mail, Phone, Calendar, Store, MapPin, ArrowLeft, DollarSign, FileText, RotateCw, Loader2, Crown } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { Modal } from './components/Modal';
 import { Pagination } from './components/Pagination';
 type RoleTab = 'customer' | 'booth_owner' | 'market_owner';
-import { adminAccountService, ManagedUserResponse, UserStatus, UserStatusHistoryResponse } from '@/application/features/admin/adminAccountService';
+import { adminAccountService, AdminOwnedBoothResponse, BoothDocumentResponse, ManagedUserResponse, UserStatus, UserStatusHistoryResponse } from '@/application/features/admin/adminAccountService';
+import { adminSubscriptionService, PackageType, SubscriptionStatus } from '@/application/features/admin/adminSubscriptionService';
 import { getErrorMessage } from '@/shared/errors/errorMapper';
+import { resolveMediaUrl } from '@/shared/utils';
+import { ImageWithFallback } from '@/presentation/components/ImageWithFallback';
 
 type StatusTab = 'Active' | 'Inactive';
 
@@ -51,10 +54,15 @@ interface AccountListItem {
   totalOrders?: number;
   totalSpent?: string;
   boothsOwned?: unknown[];
+  activePackageCode?: string;
+  activePackageName?: string;
 }
 
 interface BoothDocumentSummary {
-  verified?: boolean;
+  id: string;
+  label: string;
+  url: string;
+  verificationStatus: string;
   uploadedAt?: string;
 }
 
@@ -68,11 +76,7 @@ interface OwnedBoothSummary {
   createdAt?: string;
   revenue?: string;
   description?: string | null;
-  documents?: {
-    businessLicense?: BoothDocumentSummary;
-    foodSafety?: BoothDocumentSummary;
-    healthPermit?: BoothDocumentSummary;
-  };
+  documents: BoothDocumentSummary[];
 }
 
 const roleToApiRole = (role: RoleTab): string => {
@@ -93,8 +97,67 @@ const mapUser = (user: ManagedUserResponse): AccountListItem => ({
   address: user.address || 'No data available',
 });
 
+const packagePill = (isFree: boolean): React.CSSProperties => ({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '0.25rem',
+  maxWidth: '10rem',
+  padding: '2px 7px',
+  borderRadius: '9999px',
+  border: isFree ? '1px solid #CBD5E1' : '1px solid #C4B5FD',
+  background: isFree ? '#F8FAFC' : '#F5F3FF',
+  color: isFree ? '#475569' : '#6D28D9',
+  fontSize: '10px',
+  fontWeight: 700,
+  lineHeight: 1.4,
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+});
+
+const documentLabel = (documentType: string): string => {
+  const labels: Record<string, string> = {
+    BusinessLicense: 'Business License',
+    FoodSafetyCertificate: 'Food Safety Certificate',
+    OwnerIdentification: 'Owner Identification',
+    Other: 'Supporting Document',
+  };
+  return labels[documentType] ?? documentType.replace(/([a-z])([A-Z])/g, '$1 $2');
+};
+
+const formatDate = (value?: string | null): string => {
+  if (!value) return 'No data available';
+  return new Date(value).toLocaleDateString('en-US');
+};
+
+const mapBoothDocument = (document: BoothDocumentResponse): BoothDocumentSummary => ({
+  id: document.id,
+  label: documentLabel(document.documentType),
+  url: document.fileUrl,
+  verificationStatus: document.verificationStatus,
+  uploadedAt: formatDate(document.createdAt),
+});
+
+const mapOwnedBooth = (booth: AdminOwnedBoothResponse): OwnedBoothSummary => ({
+  id: booth.id,
+  image: booth.thumbnailUrl ?? booth.logoUrl ?? null,
+  name: booth.boothName,
+  status: booth.status,
+  market: booth.nightMarketName ?? 'No data available',
+  location: [booth.zoneName, booth.slotNumber].filter(Boolean).join(' / ') || 'No data available',
+  createdAt: formatDate(booth.createdAt),
+  revenue: booth.activePackageName
+    ? `${booth.activePackageName}${booth.packageExpiryDate ? ` until ${formatDate(booth.packageExpiryDate)}` : ''}`
+    : 'No active package',
+  description: booth.description,
+  documents: booth.documents.map(mapBoothDocument),
+});
+
 export function Accounts({ initialUserId }: AccountsProps) {
   const [users, setUsers] = useState<AccountListItem[]>([]);
+  const [selectedUser, setSelectedUser] = useState<AccountListItem | null>(null);
+  const [selectedUserLoading, setSelectedUserLoading] = useState(false);
+  const [selectedUserError, setSelectedUserError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [roleTab, setRoleTab] = useState<RoleTab>(initialUserId ? 'booth_owner' : 'customer');
   const [statusTab, setStatusTab] = useState<StatusTab>('Active');
@@ -102,6 +165,9 @@ export function Accounts({ initialUserId }: AccountsProps) {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(initialUserId || null);
   const [previewDoc, setPreviewDoc] = useState<{ url: string; label: string } | null>(null);
+  const [ownedBooths, setOwnedBooths] = useState<OwnedBoothSummary[]>([]);
+  const [boothDetailsLoading, setBoothDetailsLoading] = useState(false);
+  const [boothDetailsError, setBoothDetailsError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const [banModalUser, setBanModalUser] = useState<AccountListItem | null>(null);
@@ -111,6 +177,7 @@ export function Accounts({ initialUserId }: AccountsProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [statusHistory, setStatusHistory] = useState<UserStatusHistoryResponse[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [totalItems, setTotalItems] = useState(0);
   const [roleCounts, setRoleCounts] = useState({ customer: 0, booth_owner: 0, market_owner: 0 });
@@ -138,7 +205,44 @@ export function Accounts({ initialUserId }: AccountsProps) {
         keyword: debouncedSearch || undefined,
       });
       if (res.success) {
-        setUsers(res.data.items.map(mapUser));
+        const mappedUsers = res.data.items.map(mapUser);
+
+        if (roleTab === 'customer' || mappedUsers.length === 0) {
+          setUsers(mappedUsers);
+        } else {
+          try {
+            const packageType = roleTab === 'booth_owner' ? PackageType.Booth : PackageType.Market;
+            const subscriptions = await adminSubscriptionService.getSubscriptions(
+              packageType,
+              SubscriptionStatus.Active,
+              1,
+              500
+            );
+            const visibleUserIds = new Set(mappedUsers.map((user) => user.id));
+            const activeByOwner = new Map<string, (typeof subscriptions.items)[number]>();
+
+            subscriptions.items
+              .filter((subscription) => visibleUserIds.has(subscription.ownerId))
+              .sort((left, right) => new Date(right.endDate).getTime() - new Date(left.endDate).getTime())
+              .forEach((subscription) => {
+                if (!activeByOwner.has(subscription.ownerId)) activeByOwner.set(subscription.ownerId, subscription);
+              });
+
+            setUsers(mappedUsers.map((user) => {
+              const subscription = activeByOwner.get(user.id);
+              return subscription
+                ? {
+                    ...user,
+                    activePackageCode: subscription.packageCode,
+                    activePackageName: subscription.packageName,
+                  }
+                : user;
+            }));
+          } catch {
+            // Package tags are supplementary; the account list must remain usable.
+            setUsers(mappedUsers);
+          }
+        }
         setTotalItems(res.data.total ?? res.data.items.length);
       } else {
         setUsers([]);
@@ -207,7 +311,76 @@ export function Accounts({ initialUserId }: AccountsProps) {
 
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const paginated = users;
-  const selected = users.find(u => u.id === selectedId);
+  const selected = selectedUser?.id === selectedId
+    ? selectedUser
+    : users.find(u => u.id === selectedId);
+
+  useEffect(() => {
+    if (!selectedId) {
+      void Promise.resolve().then(() => {
+        setSelectedUser(null);
+        setSelectedUserError(null);
+      });
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        setSelectedUserLoading(true);
+        setSelectedUserError(null);
+        const response = await adminAccountService.getUser(selectedId);
+        if (!cancelled && response.success) {
+          setSelectedUser(mapUser(response.data));
+        } else if (!cancelled) {
+          setSelectedUser(null);
+          setSelectedUserError(getErrorMessage(response));
+        }
+      } catch (error: unknown) {
+        if (!cancelled) {
+          setSelectedUser(null);
+          setSelectedUserError(getErrorMessage(error));
+        }
+      } finally {
+        if (!cancelled) setSelectedUserLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId]);
+
+  const fetchBoothOwnerDetails = useCallback(async (userId: string) => {
+    try {
+      setBoothDetailsLoading(true);
+      setBoothDetailsError(null);
+      const res = await adminAccountService.getBoothOwnerDetails(userId);
+      if (res.success) {
+        setOwnedBooths(res.data.ownedBooths.map(mapOwnedBooth));
+      } else {
+        setOwnedBooths([]);
+        setBoothDetailsError(getErrorMessage(res));
+      }
+    } catch (error: unknown) {
+      setOwnedBooths([]);
+      setBoothDetailsError(getErrorMessage(error));
+    } finally {
+      setBoothDetailsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedId && selected?.role === 'booth_owner') {
+      void Promise.resolve().then(() => fetchBoothOwnerDetails(selectedId));
+      return;
+    }
+
+    void Promise.resolve().then(() => {
+      setOwnedBooths([]);
+      setBoothDetailsError(null);
+    });
+  }, [fetchBoothOwnerDetails, selected?.role, selectedId]);
 
   const handleRoleChange = (tab: RoleTab) => { setRoleTab(tab); setStatusTab('Active'); setCurrentPage(1); };
   const handleStatusChange = (tab: StatusTab) => { setStatusTab(tab); setCurrentPage(1); };
@@ -234,10 +407,16 @@ export function Accounts({ initialUserId }: AccountsProps) {
       setApiError(null);
       const isCurrentlyActive = banModalUser.status === 'Active';
       const newStatus = isCurrentlyActive ? UserStatus.Inactive : UserStatus.Active;
-      await adminAccountService.changeUserStatus(banModalUser.id, {
+      const statusResponse = await adminAccountService.changeUserStatus(banModalUser.id, {
         status: newStatus,
         reason: normalizedReason,
       });
+      if (statusResponse.success) {
+        setSelectedUser(mapUser(statusResponse.data));
+      }
+      setShowHistory(false);
+      setStatusHistory([]);
+      setHistoryError(null);
       setSuccessMessage(
         isCurrentlyActive
           ? `${banModalUser.name} has been banned successfully. An email notification with the reason has been queued for delivery.`
@@ -255,15 +434,24 @@ export function Accounts({ initialUserId }: AccountsProps) {
 
   const handleFetchHistory = async () => {
     if (!selected) return;
+    if (showHistory) {
+      setShowHistory(false);
+      return;
+    }
     try {
       setHistoryLoading(true);
+      setHistoryError(null);
       const resp = await adminAccountService.getUserStatusHistory(selected.id);
       if (resp.success) {
         setStatusHistory(resp.data.items);
+      } else {
+        setStatusHistory([]);
+        setHistoryError(getErrorMessage(resp));
       }
       setShowHistory(true);
-    } catch {
+    } catch (error: unknown) {
       setStatusHistory([]);
+      setHistoryError(getErrorMessage(error));
       setShowHistory(true);
     } finally {
       setHistoryLoading(false);
@@ -271,8 +459,33 @@ export function Accounts({ initialUserId }: AccountsProps) {
   };
 
   // --- Booth Owner Detailed Screen ---
+  if (selectedId && selectedUserLoading && !selected) {
+    return (
+      <div className="flex min-h-[24rem] items-center justify-center gap-3 text-slate-600">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        Loading account details...
+      </div>
+    );
+  }
+
+  if (selectedId && selectedUserError && !selected) {
+    return (
+      <div className="mx-auto mt-10 max-w-xl rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
+        <p className="font-semibold text-red-800">We could not open this account.</p>
+        <p className="mt-2 text-sm text-red-700">{selectedUserError}</p>
+        <button
+          type="button"
+          onClick={() => setSelectedId(null)}
+          className="mt-4 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-red-700 shadow-sm"
+        >
+          Back to account list
+        </button>
+      </div>
+    );
+  }
+
+  // --- Booth Owner Detailed Screen ---
   if (selectedId && selected && selected.role === 'booth_owner') {
-    const ownedBooths: OwnedBoothSummary[] = [];
     return (
       <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         <div>
@@ -299,12 +512,21 @@ export function Accounts({ initialUserId }: AccountsProps) {
         <div style={cardStyle}>
           <div style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-              <img src={selected.avatar} alt={selected.name} style={{ width: '4.5rem', height: '4.5rem', borderRadius: '9999px', objectFit: 'cover', boxShadow: '0 0 0 3px rgba(99,102,241,0.3)' }} />
+              <ImageWithFallback src={resolveMediaUrl(selected.avatar)} alt={selected.name} style={{ width: '4.5rem', height: '4.5rem', borderRadius: '9999px', objectFit: 'cover', boxShadow: '0 0 0 3px rgba(99,102,241,0.3)' }} />
               <div>
                 <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#111827', margin: 0 }}>{selected.name}</h3>
                 <p style={{ color: '#64748B', fontSize: '0.875rem', margin: '0.25rem 0 0' }}>Booth Owner Account</p>
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                   <span style={statusPill(selected.status)}>{selected.status}</span>
+                  {selected.activePackageName && (
+                    <span
+                      style={packagePill(selected.activePackageCode === 'BOOTH_FREE')}
+                      title={`Active plan: ${selected.activePackageName}`}
+                    >
+                      <Crown style={{ width: '0.75rem', height: '0.75rem', flexShrink: 0 }} />
+                      {selected.activePackageCode === 'BOOTH_FREE' ? 'Free' : selected.activePackageName}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -353,7 +575,22 @@ export function Accounts({ initialUserId }: AccountsProps) {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          {ownedBooths.length === 0 ? (
+          {boothDetailsLoading ? (
+            <div style={{ ...cardStyle, padding: '3rem', textAlign: 'center', color: '#64748B' }}>
+              <Loader2 style={{ width: '2rem', height: '2rem', color: '#6366F1', margin: '0 auto 1rem', animation: 'spin 1s linear infinite' }} />
+              <p style={{ margin: 0, fontWeight: 500 }}>Loading booth details...</p>
+            </div>
+          ) : boothDetailsError ? (
+            <div style={{ ...cardStyle, padding: '1.5rem', color: '#B91C1C', background: '#FEF2F2', borderColor: '#FECACA' }}>
+              <p style={{ margin: '0 0 1rem', fontWeight: 600 }}>{boothDetailsError}</p>
+              <button
+                onClick={() => fetchBoothOwnerDetails(selected.id)}
+                style={{ padding: '0.5rem 0.875rem', border: '1px solid #FCA5A5', background: '#FFFFFF', color: '#B91C1C', borderRadius: '0.5rem', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Retry
+              </button>
+            </div>
+          ) : ownedBooths.length === 0 ? (
             <div style={{ ...cardStyle, padding: '3rem', textAlign: 'center', color: '#64748B' }}>
               <Store style={{ width: '3rem', height: '3rem', color: '#CBD5E1', margin: '0 auto 1rem' }} />
               <p style={{ margin: 0, fontWeight: 500 }}>No booths registered to this owner.</p>
@@ -365,7 +602,7 @@ export function Accounts({ initialUserId }: AccountsProps) {
                   <div style={{ display: 'flex', alignItems: 'start', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                       {booth.image ? (
-                        <img src={booth.image} alt={booth.name} style={{ width: '4.5rem', height: '4.5rem', borderRadius: '0.75rem', objectFit: 'cover', flexShrink: 0, boxShadow: '0 0 0 3px rgba(99,102,241,0.2)' }} />
+                        <ImageWithFallback src={resolveMediaUrl(booth.image)} alt={booth.name} style={{ width: '4.5rem', height: '4.5rem', borderRadius: '0.75rem', objectFit: 'cover', flexShrink: 0, boxShadow: '0 0 0 3px rgba(99,102,241,0.2)' }} />
                       ) : (
                         <div style={{ width: '4.5rem', height: '4.5rem', borderRadius: '0.75rem', background: '#F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 0 0 3px rgba(99,102,241,0.2)' }}>
                           <Store style={{ width: '1.75rem', height: '1.75rem', color: '#818CF8' }} />
@@ -438,43 +675,44 @@ export function Accounts({ initialUserId }: AccountsProps) {
                         <FileText style={{ width: '1.25rem', height: '1.25rem', color: '#94A3B8' }} />
                       </div>
                       
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                        {[
-                          { doc: booth.documents?.businessLicense, label: 'Business License', images: [] },
-                          { doc: booth.documents?.foodSafety, label: 'Food Safety Certificate', images: [] },
-                          { doc: booth.documents?.healthPermit, label: 'Health Permit', images: [] },
-                        ].filter(({ doc }) => doc).map(({ doc, label, images }) => doc && (
-                          <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        {booth.documents.length === 0 ? (
+                          <div style={{ padding: '1rem', background: '#F8FAFC', border: '1px dashed #CBD5E1', borderRadius: '0.75rem', color: '#64748B', fontSize: '0.875rem' }}>
+                            No legal documents uploaded for this booth.
+                          </div>
+                        ) : booth.documents.map((doc) => {
+                          const fileUrl = resolveMediaUrl(doc.url);
+                          const isImage = /\.(png|jpe?g|webp|gif|bmp|svg)$/i.test(doc.url);
+                          const isApproved = doc.verificationStatus === 'Approved';
+                          return (
+                          <div key={doc.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.875rem', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '0.75rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <span style={{ fontSize: '0.9375rem', fontWeight: 600, color: '#1F2937' }}>{label}</span>
-                                {doc.verified && (
-                                  <span style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    fontSize: '11px',
-                                    fontWeight: 600,
-                                    padding: '2px 8px',
-                                    borderRadius: '9999px',
-                                    background: '#ECFDF5',
-                                    color: '#10B981',
-                                    textTransform: 'lowercase'
-                                  }}>
-                                    approved
-                                  </span>
-                                )}
+                                <span style={{ fontSize: '0.9375rem', fontWeight: 600, color: '#1F2937' }}>{doc.label}</span>
+                                <span style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  padding: '2px 8px',
+                                  borderRadius: '9999px',
+                                  background: isApproved ? '#ECFDF5' : '#FFF7ED',
+                                  color: isApproved ? '#10B981' : '#EA580C',
+                                  textTransform: 'lowercase'
+                                }}>
+                                  {doc.verificationStatus}
+                                </span>
                               </div>
                             </div>
                             
                             <p style={{ fontSize: '11px', color: '#94A3B8', margin: '0 0 0.25rem' }}>
-                              {doc.uploadedAt ? `Uploaded at ${doc.uploadedAt}` : 'May 28, 2026'}
+                              Uploaded at {doc.uploadedAt ?? 'No data available'}
                             </p>
                             
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-                              {images.map((imgUrl, imgIdx) => (
-                                <div 
-                                  key={imgIdx}
-                                  onClick={() => setPreviewDoc({ url: imgUrl, label: `${label} - Image ${imgIdx + 1}` })}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+                              {isImage ? (
+                                <div
+                                  onClick={() => setPreviewDoc({ url: fileUrl, label: doc.label })}
                                   style={{
                                     width: '6.5rem',
                                     height: '5rem',
@@ -496,12 +734,21 @@ export function Accounts({ initialUserId }: AccountsProps) {
                                   }}
                                   title="Click to view full image"
                                 >
-                                  <img src={imgUrl} alt={`${label} ${imgIdx}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  <ImageWithFallback src={fileUrl} alt={doc.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                 </div>
-                              ))}
+                              ) : (
+                                <a
+                                  href={fileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.625rem 0.875rem', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '0.5rem', color: '#4F46E5', fontSize: '0.8125rem', fontWeight: 600, textDecoration: 'none' }}
+                                >
+                                  <FileText style={{ width: '0.875rem', height: '0.875rem' }} /> Open document
+                                </a>
+                              )}
                             </div>
                           </div>
-                        ))}
+                        )})}
                       </div>
                     </div>
                   </div>
@@ -515,7 +762,7 @@ export function Accounts({ initialUserId }: AccountsProps) {
         <Modal isOpen={!!previewDoc} onClose={() => setPreviewDoc(null)} title={previewDoc?.label || "Document Preview"} size="md">
           {previewDoc && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', padding: '0.5rem' }}>
-              <img src={previewDoc.url} alt={previewDoc.label} style={{ maxWidth: '100%', maxHeight: '60vh', objectFit: 'contain', borderRadius: '0.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }} />
+              <ImageWithFallback src={previewDoc.url} alt={previewDoc.label} style={{ maxWidth: '100%', maxHeight: '60vh', objectFit: 'contain', borderRadius: '0.5rem', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }} />
               <button
                 onClick={() => setPreviewDoc(null)}
                 style={{ padding: '0.5rem 1.5rem', background: '#4F46E5', color: '#FFFFFF', border: 'none', borderRadius: '0.5rem', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer', transition: 'background 0.2s' }}
@@ -710,8 +957,42 @@ export function Accounts({ initialUserId }: AccountsProps) {
                 >
                   <td style={{ padding: '0.75rem 1rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <img src={u.avatar} alt={u.name} style={{ width: '2.25rem', height: '2.25rem', borderRadius: '9999px', objectFit: 'cover', display: 'block', boxShadow: hoveredRow === u.id ? '0 0 0 2px rgba(99,102,241,0.5)' : '0 0 0 2px transparent', transition: 'box-shadow 0.2s' }} />
-                      <span style={{ fontWeight: 500, color: '#111827', fontSize: '0.875rem' }}>{u.name}</span>
+                      <div style={{ position: 'relative', flexShrink: 0 }}>
+                        <ImageWithFallback src={resolveMediaUrl(u.avatar)} alt={u.name} style={{ width: '2.25rem', height: '2.25rem', borderRadius: '9999px', objectFit: 'cover', display: 'block', boxShadow: hoveredRow === u.id ? '0 0 0 2px rgba(99,102,241,0.5)' : '0 0 0 2px transparent', transition: 'box-shadow 0.2s' }} />
+                        {u.activePackageName && (
+                          <span
+                            aria-label={`Active plan: ${u.activePackageName}`}
+                            title={`Active plan: ${u.activePackageName}`}
+                            style={{
+                              position: 'absolute',
+                              right: '-0.35rem',
+                              top: '-0.35rem',
+                              display: 'flex',
+                              width: '1rem',
+                              height: '1rem',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderRadius: '9999px',
+                              border: '2px solid #FFFFFF',
+                              background: u.activePackageCode === 'BOOTH_FREE' ? '#64748B' : '#7C3AED',
+                              color: '#FFFFFF',
+                            }}
+                          >
+                            <Crown style={{ width: '0.55rem', height: '0.55rem' }} />
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <span style={{ display: 'block', fontWeight: 500, color: '#111827', fontSize: '0.875rem' }}>{u.name}</span>
+                        {u.activePackageName && (
+                          <span
+                            style={packagePill(u.activePackageCode === 'BOOTH_FREE')}
+                            title={`Active plan: ${u.activePackageName}`}
+                          >
+                            {u.activePackageCode === 'BOOTH_FREE' ? 'Free' : u.activePackageName}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#64748B' }}>{u.email}</td>
@@ -773,11 +1054,22 @@ export function Accounts({ initialUserId }: AccountsProps) {
         {selected && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <img src={selected.avatar} alt={selected.name} style={{ width: '5rem', height: '5rem', borderRadius: '9999px', objectFit: 'cover', boxShadow: '0 0 0 3px rgba(99,102,241,0.3)' }} />
+              <ImageWithFallback src={resolveMediaUrl(selected.avatar)} alt={selected.name} style={{ width: '5rem', height: '5rem', borderRadius: '9999px', objectFit: 'cover', boxShadow: '0 0 0 3px rgba(99,102,241,0.3)' }} />
               <div>
                 <h4 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#111827', margin: 0 }}>{selected.name}</h4>
                 <p style={{ fontSize: '12px', color: '#64748B', margin: '2px 0 0' }}>Role: {selected.role === 'market_owner' ? 'Market Owner' : 'Customer'}</p>
-                <span style={statusPill(selected.status)}>{selected.status}</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.35rem' }}>
+                  <span style={statusPill(selected.status)}>{selected.status}</span>
+                  {selected.activePackageName && (
+                    <span
+                      style={packagePill(false)}
+                      title={`Active plan: ${selected.activePackageName}`}
+                    >
+                      <Crown style={{ width: '0.75rem', height: '0.75rem' }} />
+                      {selected.activePackageName}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -841,7 +1133,9 @@ export function Accounts({ initialUserId }: AccountsProps) {
               </button>
               {showHistory && (
                 <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '15rem', overflowY: 'auto' }}>
-                  {statusHistory.length === 0 ? (
+                  {historyError ? (
+                    <p style={{ fontSize: '0.8125rem', color: '#B91C1C', margin: 0 }}>{historyError}</p>
+                  ) : statusHistory.length === 0 ? (
                     <p style={{ fontSize: '0.8125rem', color: '#94A3B8', fontStyle: 'italic', margin: 0 }}>No status history available.</p>
                   ) : (
                     statusHistory.map(hist => (

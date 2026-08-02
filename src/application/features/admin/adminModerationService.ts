@@ -49,6 +49,7 @@ export interface MarketModerationOverview {
   moderationStatus: MarketModerationStatus;
   totalBooths: number;
   activeBooths: number;
+  availableBooths: number;
   totalComplaintCount: number;
   seriousComplaintCount: number;
   createdAt: string;

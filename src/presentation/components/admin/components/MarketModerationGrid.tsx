@@ -5,6 +5,7 @@ import { Search, MapPin, AlertCircle, Eye, Lock, Unlock, RefreshCw, ShieldCheck 
 import type { MarketModerationOverview } from '@/application/features/admin/adminModerationService';
 import { Pagination } from '@/presentation/components/admin/components/Pagination';
 import { ImageWithFallback } from '@/presentation/components/ImageWithFallback';
+import { resolveMediaUrl } from '@/shared/utils';
 
 interface MarketModerationGridProps {
   items: MarketModerationOverview[];
@@ -124,19 +125,24 @@ export function MarketModerationGrid(props: MarketModerationGridProps) {
             </div>
           ) : items.length > 0 ? (
             <div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 items-stretch gap-6">
                 {items.map((m) => {
                   const isSuspended = m.moderationStatus === 'Suspended';
                   const displayStatus = isSuspended ? 'Suspended' : m.lifecycleStatus;
                   return (
                     <div
                       key={m.id}
-                      className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all overflow-hidden relative flex flex-col group"
+                      className="h-full min-h-[520px] bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all overflow-hidden relative flex flex-col group"
                     >
                       {/* Thumbnail */}
-                      <div className="aspect-[16/9] w-full bg-slate-100 relative">
+                      <div className="relative h-56 w-full shrink-0 overflow-hidden bg-slate-100">
                         {m.thumbnailUrl ? (
-                          <ImageWithFallback src={m.thumbnailUrl} alt={m.marketName || 'Market'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <ImageWithFallback
+                            key={m.thumbnailUrl}
+                            src={resolveMediaUrl(m.thumbnailUrl)}
+                            alt={m.marketName || 'Market'}
+                            className="absolute inset-0 block h-full w-full object-cover"
+                          />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
                             <MapPin className="w-8 h-8 text-slate-300" />
@@ -165,8 +171,8 @@ export function MarketModerationGrid(props: MarketModerationGridProps) {
                           </div>
                           <div className="w-px h-8 bg-slate-200"></div>
                           <div className="flex flex-col items-center gap-0.5">
-                            <span className="font-semibold text-emerald-600">{m.activeBooths || 0}</span>
-                            <span className="text-slate-500">Active</span>
+                            <span className="font-semibold text-emerald-600">{m.availableBooths || 0}</span>
+                            <span className="text-slate-500">Available</span>
                           </div>
                           <div className="w-px h-8 bg-slate-200"></div>
                           <div className="flex flex-col items-center gap-0.5">

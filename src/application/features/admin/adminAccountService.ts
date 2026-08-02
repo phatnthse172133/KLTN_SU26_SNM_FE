@@ -50,6 +50,40 @@ export interface UserStatusHistoryResponse {
   createdAt: string;
 }
 
+export interface BoothDocumentResponse {
+  id: string;
+  documentType: string;
+  fileUrl: string;
+  verificationStatus: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminOwnedBoothResponse {
+  id: string;
+  boothName: string;
+  boothCode?: string | null;
+  status: string;
+  description?: string | null;
+  phoneNumber?: string | null;
+  thumbnailUrl?: string | null;
+  logoUrl?: string | null;
+  nightMarketName?: string | null;
+  zoneName?: string | null;
+  slotNumber?: string | null;
+  mapPositionX?: number | null;
+  mapPositionY?: number | null;
+  activePackageName?: string | null;
+  packageExpiryDate?: string | null;
+  createdAt: string;
+  documents: BoothDocumentResponse[];
+}
+
+export interface BoothOwnerAccountDetailResponse {
+  account: ManagedUserResponse;
+  ownedBooths: AdminOwnedBoothResponse[];
+}
+
 export interface UserListQueryParams {
   page?: number;
   pageSize?: number;
@@ -61,6 +95,12 @@ export interface UserListQueryParams {
 }
 
 export const adminAccountService = {
+  getUser: async (userId: string) => {
+    return apiClient.get<BaseResponse<ManagedUserResponse>>(
+      `/account/users/${userId}`
+    );
+  },
+
   /**
    * Fetches users (paginated + filtered) for the Admin dashboard.
    * Backend: GET /api/account/users?Page=&PageSize=&Keyword=&Role=&Status=
@@ -114,6 +154,17 @@ export const adminAccountService = {
   getUserStatusHistory: async (userId: string, page = 1, pageSize = 10) => {
     return apiClient.get<BaseResponse<PaginationResponse<UserStatusHistoryResponse>>>(
       `/account/users/${userId}/status-history?Page=${page}&PageSize=${pageSize}`
+    );
+  },
+
+  /**
+   * Gets Booth Owner account details with owned booth, assignment and legal documents.
+   * Backend: GET /api/account/users/{userId}/booth-owner-details
+   * Requires role: Admin
+   */
+  getBoothOwnerDetails: async (userId: string) => {
+    return apiClient.get<BaseResponse<BoothOwnerAccountDetailResponse>>(
+      `/account/users/${userId}/booth-owner-details`
     );
   },
 };
