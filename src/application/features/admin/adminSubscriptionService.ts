@@ -20,6 +20,7 @@ export interface AdminSubscriptionDto {
     ownerEmail: string;
     packageType: PackageType;
     packageId: string;
+    packageCode: string;
     packageName: string;
     startDate: string;
     endDate: string;
