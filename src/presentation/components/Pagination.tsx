@@ -120,7 +120,7 @@ export function Pagination({
             <span>rows</span>
           </div>
           <span className="text-sm text-gray-600">
-            {startItem}–{endItem} of {totalItems}
+            {startItem}-{endItem} of {totalItems}
           </span>
         </div>
         <div className="flex justify-center">{pageButtons}</div>
@@ -146,7 +146,7 @@ export function Pagination({
           <span>rows</span>
         </div>
         <span className="text-sm text-gray-700 font-medium">
-          {startItem}–{endItem} of {totalItems} rows
+          {startItem}-{endItem} of {totalItems} rows
         </span>
       </div>
 

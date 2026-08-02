@@ -1,6 +1,7 @@
 "use client";
-import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { createContext, useCallback, useContext, useState, ReactNode, useEffect } from "react";
 import { boothService } from "@/application/features/booth/boothService";
+import { useAuth } from "@/application/context/AuthContext";
 import type { Booth } from "@/shared/types";
 
 interface BoothContextType {
@@ -12,15 +13,19 @@ interface BoothContextType {
 }
 
 const BoothContext = createContext<BoothContextType | undefined>(undefined);
+const normalizeRole = (role?: string | null) => role?.replace(/[_\s-]/g, "").toLowerCase();
 
 export function BoothProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isReady, user } = useAuth();
   const [booths, setBooths] = useState<Booth[]>([]);
   const [selectedBooth, setSelectedBooth] = useState<Booth | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function refreshBooths() {
+  const refreshBooths = useCallback(async () => {
+    if (!isReady) return;
+
     setLoading(true);
-    if (typeof window !== "undefined" && !localStorage.getItem("token")) {
+    if (!isAuthenticated || normalizeRole(user?.role) !== "boothowner") {
       setBooths([]);
       setSelectedBooth(null);
       setLoading(false);
@@ -28,7 +33,6 @@ export function BoothProvider({ children }: { children: ReactNode }) {
     }
     try {
       const res = await boothService.getMyBooths();
-      // The Booth Owner endpoint returns one owned booth, not a paged collection.
       const boothList = res.data ? [res.data] : [];
       setBooths(boothList);
       setSelectedBooth((current) => boothList.find((booth) => booth.id === current?.id) ?? boothList[0] ?? null);
@@ -38,11 +42,12 @@ export function BoothProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [isAuthenticated, isReady, user?.role]);
 
   useEffect(() => {
-    void refreshBooths();
-  }, []);
+    if (!isReady) return;
+    void Promise.resolve().then(refreshBooths);
+  }, [isReady, refreshBooths]);
 
   return (
     <BoothContext.Provider value={{ selectedBooth, booths, setSelectedBooth, loading, refreshBooths }}>

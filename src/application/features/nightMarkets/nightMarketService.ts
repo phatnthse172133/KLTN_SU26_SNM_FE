@@ -5,6 +5,9 @@ export const nightMarketService = {
   getAll: async (page = 1, pageSize = 10) => {
     return apiClient.get<BaseResponse<PaginationResponse<NightMarket>>>(`/night-markets${buildQuery({ Page: page, PageSize: pageSize })}`);
   },
+  getMine: async () => {
+    return apiClient.get<BaseResponse<NightMarket[]>>("/night-markets/mine");
+  },
   getById: async (id: string) => {
     return apiClient.get<BaseResponse<NightMarket>>(`/night-markets/${id}`);
   },

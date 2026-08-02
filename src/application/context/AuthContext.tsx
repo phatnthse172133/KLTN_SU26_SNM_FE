@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, ReactNode, useEffect } from
 import { useRouter } from "next/navigation";
 import { accountService } from "@/application/features/account/accountService";
 import { authService } from "@/application/features/auth/authService";
+import { isAppError } from "@/shared/errors/errorMapper";
 import type { UserProfile } from "@/shared/types";
 
 interface AuthContextType {
@@ -14,6 +15,7 @@ interface AuthContextType {
   login: (token: string, refreshToken?: string | null, user?: UserProfile | null) => void;
   logout: () => void;
   refreshUser: () => Promise<void>;
+  updateUser: (updatedUser: UserProfile) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,30 +32,83 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedToken = localStorage.getItem("token");
     const storedRefreshToken = localStorage.getItem("refreshToken");
     const storedUser = localStorage.getItem("user");
+    let cachedUser: UserProfile | null = null;
     if (storedToken) {
-      let parsedUser: UserProfile | null = null;
       if (storedUser) {
         try {
-          parsedUser = JSON.parse(storedUser) as UserProfile;
+          cachedUser = JSON.parse(storedUser) as UserProfile;
         } catch {
           localStorage.removeItem("user");
         }
       }
-      setToken(storedToken);
-      setRefreshToken(storedRefreshToken);
-      setUser(parsedUser);
-      setIsAuthenticated(true);
       accountService.getMyAccount()
         .then((response) => {
           if (response.data) {
+            setToken(storedToken);
+            setRefreshToken(storedRefreshToken);
             setUser(response.data);
             localStorage.setItem("user", JSON.stringify(response.data));
+            setIsAuthenticated(true);
+          } else {
+            throw new Error("No user data");
           }
         })
-        .catch(() => undefined);
+        .catch((error: unknown) => {
+          if (isAppError(error) && error.status === 401) {
+            localStorage.removeItem("token");
+            localStorage.removeItem("refreshToken");
+            localStorage.removeItem("user");
+            setToken(null);
+            setRefreshToken(null);
+            setUser(null);
+            setIsAuthenticated(false);
+            router.replace("/login");
+            return;
+          }
+
+          if (cachedUser) {
+            setToken(storedToken);
+            setRefreshToken(storedRefreshToken);
+            setUser(cachedUser);
+            setIsAuthenticated(true);
+            return;
+          }
+
+          setToken(storedToken);
+          setRefreshToken(storedRefreshToken);
+          setIsAuthenticated(true);
+        })
+        .finally(() => {
+          setIsReady(true);
+        });
+    } else {
+      Promise.resolve().then(() => setIsReady(true));
     }
-    setIsReady(true);
+  }, [router]);
+
+  useEffect(() => {
+    const syncSessionAcrossTabs = (event: StorageEvent) => {
+      if (event.key === "token" && event.oldValue !== event.newValue) {
+        window.location.reload();
+      }
+    };
+
+    window.addEventListener("storage", syncSessionAcrossTabs);
+    return () => window.removeEventListener("storage", syncSessionAcrossTabs);
   }, []);
+
+  useEffect(() => {
+    if (!isReady) return;
+
+    const reconcileSessionOnFocus = () => {
+      if (localStorage.getItem("token") !== token) {
+        window.location.reload();
+      }
+    };
+
+    window.addEventListener("focus", reconcileSessionOnFocus);
+    return () => window.removeEventListener("focus", reconcileSessionOnFocus);
+  }, [isReady, token]);
 
   const login = (newToken: string, newRefreshToken?: string | null, newUser?: UserProfile | null) => {
     localStorage.setItem("token", newToken);
@@ -69,6 +124,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await accountService.getMyAccount();
     setUser(response.data ?? null);
     if (response.data) localStorage.setItem("user", JSON.stringify(response.data));
+  };
+
+  const updateUser = (updatedUser: UserProfile) => {
+    setUser(updatedUser);
+    localStorage.setItem("user", JSON.stringify(updatedUser));
   };
 
   const logout = async () => {
@@ -87,7 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isReady, token, refreshToken, user, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ isAuthenticated, isReady, token, refreshToken, user, login, logout, refreshUser, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

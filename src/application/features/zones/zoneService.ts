@@ -8,13 +8,13 @@ export const zoneService = {
   getById: async (zoneId: string) => {
     return apiClient.get<BaseResponse<Zone>>(`/zones/${zoneId}`);
   },
-  create: async (nightMarketId: string, data: { zoneName: string; description?: string | null; color?: string | null; status?: string }) => {
+  create: async (nightMarketId: string, data: { zoneName: string; description?: string | null; color?: string | null; status?: number }) => {
     return apiClient.post<BaseResponse<Zone>>(`/night-markets/${nightMarketId}/zones`, data);
   },
-  update: async (zoneId: string, data: { zoneName: string; description?: string | null; color?: string | null; status?: string }) => {
+  update: async (zoneId: string, data: { zoneName: string; description?: string | null; color?: string | null; status?: number }) => {
     return apiClient.put<BaseResponse<Zone>>(`/zones/${zoneId}`, data);
   },
-  updateStatus: async (zoneId: string, status: string) => {
+  updateStatus: async (zoneId: string, status: number) => {
     return apiClient.patch<BaseResponse<Zone>>(`/zones/${zoneId}/status`, { status });
   },
   delete: async (zoneId: string) => {

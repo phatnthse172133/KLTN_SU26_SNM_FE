@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { BoothProvider, useBooth } from "@/application/context/BoothContext";
 import { accountService } from "@/application/features/account/accountService";
+import { useNotifications } from "@/application/context/NotificationContext";
 import {
   AlertCircle,
   Bell,
@@ -25,7 +27,6 @@ import {
   Package,
   Phone,
   Search,
-  Settings,
   Star,
   Store,
   TrendingUp,
@@ -33,6 +34,9 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/application/context/AuthContext";
+import { getErrorMessage } from "@/shared/errors/errorMapper";
+import { normalizePhoneNumber, validatePhoneNumber } from "@/shared/utils/phoneUtils";
+import { resolveMediaUrl } from "@/shared/utils";
 
 const navItems = [
   { name: "Dashboard", path: "/boothowner", icon: LayoutDashboard },
@@ -45,7 +49,6 @@ const navItems = [
   { name: "Sales & Analytics", path: "/boothowner/analytics", icon: TrendingUp },
   { name: "Subscription Packages", path: "/boothowner/fees", icon: CreditCard },
   { name: "Support", path: "/boothowner/support", icon: HeadphonesIcon },
-  { name: "Settings", path: "/boothowner/settings", icon: Settings },
 ];
 
 const searchableRoutes = navItems.map((item) => ({
@@ -59,6 +62,8 @@ const getInitials = (name?: string | null) => {
   if (!name) return "U";
   return name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "U";
 };
+
+const normalizeRole = (role?: string | null) => role?.replace(/[_\s-]/g, "").toLowerCase();
 
 function PasswordInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
   const [show, setShow] = useState(false);
@@ -80,7 +85,7 @@ function PasswordInput({ value, onChange, placeholder }: { value: string; onChan
 }
 
 function ProfileModal({ onClose, initialTab = "profile" }: { onClose: () => void; initialTab?: "profile" | "password" }) {
-  const { logout, user, refreshUser } = useAuth();
+  const { logout, user, refreshUser, updateUser } = useAuth();
   const { selectedBooth } = useBooth();
   const [activeTab, setActiveTab] = useState<"profile" | "password">(initialTab);
   const [editing, setEditing] = useState(false);
@@ -89,28 +94,80 @@ function ProfileModal({ onClose, initialTab = "profile" }: { onClose: () => void
   const [email, setEmail] = useState(user?.email ?? "");
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState("");
+  const [profilePhoneError, setProfilePhoneError] = useState("");
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [pwError, setPwError] = useState("");
   const [pwSaved, setPwSaved] = useState(false);
+  const [avatarSaving, setAvatarSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const profileTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pwTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    setName(user?.fullName ?? "");
-    setPhone(user?.phone ?? "");
-    setEmail(user?.email ?? "");
-  }, [user]);
+    return () => {
+      if (profileTimerRef.current) clearTimeout(profileTimerRef.current);
+      if (pwTimerRef.current) clearTimeout(pwTimerRef.current);
+    };
+  }, []);
 
   const saveProfile = async () => {
     setProfileError("");
+    setProfilePhoneError("");
+    if (phone && !validatePhoneNumber(phone)) {
+      setProfilePhoneError("Enter a valid Vietnamese phone number starting with 0 or +84.");
+      return;
+    }
     try {
-      await accountService.updateMyAccount({ fullName: name, phone });
-      await refreshUser();
+      await accountService.updateMyAccount({
+        fullName: name.trim(),
+        phone: phone ? normalizePhoneNumber(phone) : null,
+      });
+      try {
+        await refreshUser();
+      } catch (err) {
+        console.error("Failed to refresh user after profile update:", err);
+      }
       setEditing(false);
       setProfileSaved(true);
-      setTimeout(() => setProfileSaved(false), 2500);
-    } catch {
-      setProfileError("We couldn't update your profile. Please review your information and try again.");
+      if (profileTimerRef.current) clearTimeout(profileTimerRef.current);
+      profileTimerRef.current = setTimeout(() => setProfileSaved(false), 3000);
+    } catch (error) {
+      setProfileError(getErrorMessage(error));
+    }
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setProfileError("Avatar file must be less than 5MB");
+      return;
+    }
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setProfileError("Only JPG, PNG and WEBP formats are allowed");
+      return;
+    }
+
+    try {
+        setAvatarSaving(true);
+        setProfileError("");
+        const response = await accountService.uploadAvatar(file);
+        if (response.data) {
+          updateUser(response.data);
+          setProfileSaved(true);
+          if (profileTimerRef.current) clearTimeout(profileTimerRef.current);
+          profileTimerRef.current = setTimeout(() => setProfileSaved(false), 3000);
+        }
+    } catch(err) {
+        setProfileError(getErrorMessage(err));
+    } finally {
+        setAvatarSaving(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -123,9 +180,10 @@ function ProfileModal({ onClose, initialTab = "profile" }: { onClose: () => void
       await accountService.changePassword({ currentPassword: currentPw, newPassword: newPw, confirmNewPassword: confirmPw });
       setCurrentPw(""); setNewPw(""); setConfirmPw("");
       setPwSaved(true);
-      setTimeout(() => setPwSaved(false), 2500);
-    } catch {
-      setPwError("We couldn't update your password. Please check your current password and try again.");
+      if (pwTimerRef.current) clearTimeout(pwTimerRef.current);
+      pwTimerRef.current = setTimeout(() => setPwSaved(false), 3000);
+    } catch (error) {
+      setPwError(getErrorMessage(error));
     }
   };
 
@@ -141,14 +199,23 @@ function ProfileModal({ onClose, initialTab = "profile" }: { onClose: () => void
 
         <div className="flex flex-col items-center pt-6 pb-4 px-6">
           <div className="relative">
-            {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt={user.fullName} className="w-[72px] h-[72px] rounded-full object-cover" />
+            {user?.avatarUrl && failedAvatarUrl !== user.avatarUrl ? (
+              <Image
+                src={resolveMediaUrl(user.avatarUrl)}
+                alt={user.fullName ?? "Avatar"}
+                width={72}
+                height={72}
+                unoptimized={true}
+                className="w-[72px] h-[72px] rounded-full object-cover"
+                onError={() => setFailedAvatarUrl(user.avatarUrl!)}
+              />
             ) : (
               <div className="w-[72px] h-[72px] rounded-full bg-indigo-600 flex items-center justify-center text-white font-black text-2xl">
                 {getInitials(user?.fullName)}
               </div>
             )}
-            <button className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full shadow-md flex items-center justify-center bg-indigo-50 hover:bg-indigo-100 border-2 border-white transition-colors">
+            <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" ref={fileInputRef} onChange={handleAvatarChange} disabled={avatarSaving} />
+            <button onClick={() => fileInputRef.current?.click()} disabled={avatarSaving} className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full shadow-md flex items-center justify-center bg-indigo-50 hover:bg-indigo-100 border-2 border-white transition-colors disabled:opacity-50">
               <Camera className="w-3.5 h-3.5 text-indigo-600" />
             </button>
           </div>
@@ -186,8 +253,14 @@ function ProfileModal({ onClose, initialTab = "profile" }: { onClose: () => void
                   <label className="text-xs font-medium text-gray-500 mb-1.5 block">{f.label}</label>
                   <div className="relative">
                     <f.icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input value={f.value} onChange={(e) => f.onChange(e.target.value)} disabled={!editing || f.readonly} className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-indigo-500 disabled:bg-gray-50 disabled:text-gray-600 transition-colors" />
+                    <input value={f.value} onChange={(e) => {
+                      f.onChange(e.target.value);
+                      if (f.label === "Phone") setProfilePhoneError("");
+                    }} disabled={!editing || f.readonly} className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-indigo-500 disabled:bg-gray-50 disabled:text-gray-600 transition-colors" />
                   </div>
+                  {f.label === "Phone" && profilePhoneError && (
+                    <p className="mt-1 text-xs text-red-600">{profilePhoneError}</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -237,10 +310,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { isAuthenticated, isReady, logout, user } = useAuth();
+  const { unreadCount, recentNotifications, markAsRead } = useNotifications();
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [showBell, setShowBell] = useState(false);
   const [showAvatarMenu, setShowAvatarMenu] = useState(false);
+  const [failedHeaderAvatarUrl, setFailedHeaderAvatarUrl] = useState<string | null>(null);
   const [profileModal, setProfileModal] = useState<null | "profile" | "password">(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const bellRef = useRef<HTMLDivElement>(null);
@@ -253,8 +328,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isReady && !isAuthenticated) {
       router.replace("/login");
+      return;
     }
-  }, [isAuthenticated, isReady, router]);
+
+    if (isReady && isAuthenticated && user) {
+      const role = normalizeRole(user.role);
+      if (role !== "boothowner") {
+        if (role === "admin") router.replace("/admin");
+        else if (role === "marketowner") router.replace("/marketowner");
+        else router.replace("/login");
+        return;
+      }
+    }
+  }, [isAuthenticated, isReady, router, user]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -266,7 +352,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  if (!isReady || !isAuthenticated) {
+  const role = normalizeRole(user?.role);
+  if (!isReady || !isAuthenticated || !user || role !== "boothowner") {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center text-sm font-medium text-gray-500">
         Loading...
@@ -318,18 +405,45 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
             <div className="flex items-center gap-5 ml-4">
               <div className="relative" ref={bellRef}>
-                <button onClick={() => { setShowBell(!showBell); setShowAvatarMenu(false); }} className="relative text-gray-500 hover:text-gray-700 p-1"><Bell className="w-5 h-5" /></button>
+                <button onClick={() => {
+                  setShowBell(!showBell);
+                  setShowAvatarMenu(false);
+                }} className="relative text-gray-500 hover:text-gray-700 p-1">
+                  <Bell className="w-5 h-5" />
+                  {unreadCount > 0 && <span className="absolute top-0 right-0 min-w-[16px] h-[16px] flex items-center justify-center text-[10px] font-bold text-white rounded-full" style={{ background: '#EF4444', border: '2px solid #FFFFFF' }}>{unreadCount > 9 ? '9+' : unreadCount}</span>}
+                </button>
                 {showBell && (
                   <div className="absolute top-full right-0 mt-3 w-80 bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 overflow-hidden">
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100"><h3 className="text-sm font-bold text-gray-900">Notifications</h3></div>
-                    <div className="px-4 py-6 text-center text-sm text-gray-400">No data available</div>
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100"><h3 className="text-sm font-bold text-gray-900">Notifications</h3>{unreadCount > 0 && <span className="text-xs font-medium text-gray-500">{unreadCount} unread</span>}</div>
+                    <div className="max-h-80 overflow-y-auto">
+                      {recentNotifications.length === 0 && <div className="px-4 py-6 text-center text-sm text-gray-400">No notifications</div>}
+                      {recentNotifications.map(n => (
+                        <button key={n.id} type="button" onClick={() => { if (!n.isRead) void markAsRead(n.id); }} className="w-full text-left px-4 py-3 border-b border-gray-50 transition-colors hover:bg-gray-50" style={{ background: n.isRead ? 'transparent' : 'rgba(99,102,241,0.03)' }}>
+                          <p className={`text-sm ${!n.isRead ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>{n.title}</p>
+                          <p className="text-xs text-gray-500 mt-0.5 break-words">{n.content}</p>
+                          <p className="text-[10px] text-gray-400 mt-1">{new Date(n.createdAt).toLocaleString()}</p>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
 
               <div className="relative border-l border-gray-200 pl-5" ref={avatarRef}>
                 <button onClick={() => { setShowAvatarMenu(!showAvatarMenu); setShowBell(false); }} className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-                  <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-sm">{user?.avatarUrl ? <img src={user.avatarUrl} alt={user.fullName} className="w-8 h-8 rounded-full object-cover" /> : getInitials(user?.fullName)}</div>
+                  <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-sm">
+                    {user?.avatarUrl && failedHeaderAvatarUrl !== user.avatarUrl ? (
+                      <Image
+                        src={resolveMediaUrl(user.avatarUrl)}
+                        alt={user.fullName ?? "Avatar"}
+                        width={32}
+                        height={32}
+                        unoptimized={true}
+                        className="w-8 h-8 rounded-full object-cover"
+                        onError={() => setFailedHeaderAvatarUrl(user.avatarUrl!)}
+                      />
+                    ) : getInitials(user?.fullName)}
+                  </div>
                   <div className="text-left hidden lg:block"><p className="text-sm font-semibold text-gray-900 leading-none">{user?.fullName ?? "No user data"}</p><p className="text-xs text-gray-400 mt-0.5">{user?.role ?? "Booth Owner"}</p></div>
                 </button>
                 {showAvatarMenu && (

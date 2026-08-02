@@ -5,10 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Lock, Mail, Store, User } from "lucide-react";
 import { useAuth } from "@/application/context/AuthContext";
 import { authService } from "@/application/features/auth/authService";
+import { getErrorMessage } from "@/shared/errors/errorMapper";
 
 export function LoginRegister() {
   const searchParams = useSearchParams();
-  const [isLogin, setIsLogin] = useState(searchParams?.get("tab") !== "register");
+  const isAdminLogin = searchParams?.get("role") === "admin";
+  const [isLogin, setIsLogin] = useState(isAdminLogin || searchParams?.get("tab") !== "register");
   const [email, setEmail] = useState("");
   const [userName, setUserName] = useState("");
   const [fullName, setFullName] = useState("");
@@ -24,6 +26,7 @@ export function LoginRegister() {
     const normalizedRole = role?.replace(/[_\s-]/g, "").toLowerCase();
     if (normalizedRole === "admin") return "/admin";
     if (normalizedRole === "boothowner") return "/boothowner";
+    if (normalizedRole === "marketowner") return "/marketowner";
     return "/login";
   };
 
@@ -66,7 +69,7 @@ export function LoginRegister() {
       setPassword("");
       setConfirmPassword("");
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Request failed.");
+      setError(getErrorMessage(submitError));
     } finally {
       setLoading(false);
     }
@@ -186,7 +189,8 @@ export function LoginRegister() {
             </button>
           </form>
 
-          <div className="mt-6">
+                    {!isAdminLogin && (
+<div className="mt-6">
             <button
               onClick={() => {
                 setIsLogin(!isLogin);
@@ -197,6 +201,7 @@ export function LoginRegister() {
               {isLogin ? "Register a booth owner account" : "Sign in to existing account"}
             </button>
           </div>
+          )}
         </div>
       </div>
     </div>

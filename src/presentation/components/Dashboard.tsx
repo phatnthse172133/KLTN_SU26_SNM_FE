@@ -1,7 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Calendar, Package, Star, TrendingUp } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  AlertCircle,
+  Calendar,
+  Lock,
+  Package,
+  RefreshCw,
+  ShoppingBag,
+  Star,
+  TrendingUp,
+} from "lucide-react";
 import {
   CartesianGrid,
   Line,
@@ -11,129 +20,132 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useBooth } from "@/application/context/BoothContext";
-import { reviewService } from "@/application/features/reviews/reviewService";
+import {
+  boothDashboardService,
+  type BoothDashboard,
+  type DashboardRange,
+} from "@/application/features/dashboard/boothDashboardService";
+import { getErrorMessage } from "@/shared/errors/errorMapper";
 
-type DateRange = "today" | "week" | "month" | "year";
+const formatMoney = (value: number) =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(value);
 
-const pad = (value: number) => String(value).padStart(2, "0");
+const formatDateTime = (value: string) =>
+  new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 
-const toDateInput = (date: Date) =>
-  `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-
-const getIsoWeekInput = (date: Date) => {
-  const utcDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const day = utcDate.getUTCDay() || 7;
-  utcDate.setUTCDate(utcDate.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 1));
-  const week = Math.ceil(((utcDate.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-  return `${utcDate.getUTCFullYear()}-W${pad(week)}`;
+const statusMeta: Record<string, { label: string; className: string }> = {
+  Placed: { label: "New", className: "bg-blue-50 text-blue-700" },
+  Preparing: { label: "Preparing", className: "bg-amber-50 text-amber-700" },
+  ReadyForPickup: { label: "Ready", className: "bg-violet-50 text-violet-700" },
+  Completed: { label: "Completed", className: "bg-emerald-50 text-emerald-700" },
+  Cancelled: { label: "Cancelled", className: "bg-red-50 text-red-700" },
+  Underpaid: { label: "Underpaid", className: "bg-orange-50 text-orange-700" },
+  Refunded: { label: "Refunded", className: "bg-slate-100 text-slate-600" },
 };
 
-const formatDateLabel = (value: string) => {
-  const date = new Date(`${value}T00:00:00`);
-  return Number.isNaN(date.getTime())
-    ? "No date selected"
-    : date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-};
+function StatusBadge({ status }: { status: string }) {
+  const meta = statusMeta[status] ?? { label: status, className: "bg-slate-100 text-slate-600" };
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${meta.className}`}>{meta.label}</span>;
+}
 
-const formatMonthLabel = (value: string) =>
-  new Date(2000, Number(value) - 1, 1).toLocaleDateString("en-US", { month: "long" });
+function UpgradePrompt({ packageName, feature }: { packageName: string; feature: string }) {
+  return (
+    <div className="h-full min-h-[180px] flex flex-col items-center justify-center text-center gap-2 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/50 p-6">
+      <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+        <Lock className="w-5 h-5 text-indigo-600" />
+      </div>
+      <p className="text-sm font-bold text-gray-900">{feature} is locked</p>
+      <p className="text-xs text-gray-500 max-w-[260px]">
+        Upgrade to <span className="font-semibold text-indigo-600">{packageName}</span> to unlock this insight.
+      </p>
+    </div>
+  );
+}
 
-const formatWeekLabel = (value: string) => {
-  const [year, weekValue] = value.split("-W");
-  return year && weekValue ? `Week ${weekValue}, ${year}` : "No week selected";
+const rangeLabels: Record<DashboardRange, { revenueTitle: string; periodLabel: string }> = {
+  today: { revenueTitle: "Today's Revenue", periodLabel: "Today" },
+  week: { revenueTitle: "Weekly Revenue", periodLabel: "Last 7 days" },
+  month: { revenueTitle: "Monthly Revenue", periodLabel: "Last 30 days" },
+  year: { revenueTitle: "Yearly Revenue", periodLabel: "Last 12 months" },
 };
 
 export function Dashboard() {
-  const { selectedBooth, loading: boothLoading } = useBooth();
-  const today = useMemo(() => new Date(), []);
-  const currentYear = String(today.getFullYear());
-  const [dateRange, setDateRange] = useState<DateRange>("today");
-  const [selectedDate, setSelectedDate] = useState(() => toDateInput(today));
-  const [selectedWeek, setSelectedWeek] = useState(() => getIsoWeekInput(today));
-  const [selectedMonth, setSelectedMonth] = useState(() => pad(today.getMonth() + 1));
-  const [selectedMonthYear, setSelectedMonthYear] = useState(currentYear);
-  const [selectedYear, setSelectedYear] = useState(currentYear);
-  const [reviewTotal, setReviewTotal] = useState<number | null>(null);
-  const [reviewLoading, setReviewLoading] = useState(false);
+  const [range, setRange] = useState<DashboardRange>("week");
+  const [dashboard, setDashboard] = useState<BoothDashboard | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadDashboard = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await boothDashboardService.getDashboard(range, signal);
+      setDashboard(response.data);
+    } catch (loadError) {
+      if (!signal?.aborted) {
+        setDashboard(null);
+        setError(getErrorMessage(loadError));
+      }
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
+  }, [range]);
 
   useEffect(() => {
-    if (!selectedBooth?.id) {
-      setReviewTotal(null);
-      return;
-    }
+    const controller = new AbortController();
+    void Promise.resolve().then(() => loadDashboard(controller.signal));
+    return () => controller.abort();
+  }, [loadDashboard]);
 
-    let active = true;
-    setReviewLoading(true);
-    reviewService
-      .getByBooth(selectedBooth.id, 1, 1)
-      .then((response) => {
-        if (active) setReviewTotal(response.data.total);
-      })
-      .catch(() => {
-        if (active) setReviewTotal(null);
-      })
-      .finally(() => {
-        if (active) setReviewLoading(false);
-      });
+  const summary = dashboard?.summary;
+  const tier = dashboard?.entitlements.analyticsTier ?? "Free";
+  const isLockedForCharts = dashboard != null && tier === "Free";
 
-    return () => {
-      active = false;
-    };
-  }, [selectedBooth?.id]);
+  const stats = summary
+    ? [
+        {
+          title: "Revenue (Paid)",
+          value: formatMoney(summary.totalRevenue),
+          subtitle: `${summary.totalOrders} paid completed order${summary.totalOrders === 1 ? "" : "s"}`,
+          icon: TrendingUp,
+          color: "text-emerald-500",
+          bg: "bg-emerald-50",
+        },
+        {
+          title: "Orders",
+          value: String(summary.placedOrders),
+          subtitle: `${summary.completedOrders} completed - ${summary.cancelledOrders} cancelled`,
+          icon: Package,
+          color: "text-indigo-600",
+          bg: "bg-indigo-50",
+        },
+        {
+          title: "Avg Order Value",
+          value: summary.totalOrders > 0 ? formatMoney(summary.averageOrderValue) : "No data",
+          subtitle: "Across paid orders",
+          icon: ShoppingBag,
+          color: "text-sky-500",
+          bg: "bg-sky-50",
+        },
+        {
+          title: "Rating",
+          value: summary.reviewCount > 0 ? summary.averageRating.toFixed(1) : "No data",
+          subtitle: summary.reviewCount > 0 ? `From ${summary.reviewCount} visible reviews` : "No reviews yet",
+          icon: Star,
+          color: "text-orange-500",
+          bg: "bg-orange-50",
+        },
+      ]
+    : [];
 
-  const periodLabel = dateRange === "today"
-    ? formatDateLabel(selectedDate)
-    : dateRange === "week"
-      ? formatWeekLabel(selectedWeek)
-      : dateRange === "month"
-        ? `${formatMonthLabel(selectedMonth)} ${selectedMonthYear}`
-        : selectedYear;
+  const revenueData = (dashboard?.revenueTrend ?? []).map((point) => ({
+    name: point.label,
+    revenue: point.revenue,
+    orders: point.orderCount,
+  }));
 
-  const revenueTitle = dateRange === "today"
-    ? "Today's Revenue"
-    : dateRange === "week"
-      ? "Weekly Revenue"
-      : dateRange === "month"
-        ? "Monthly Revenue"
-        : "Yearly Revenue";
-
-  const ratingValue = boothLoading || reviewLoading
-    ? "..."
-    : selectedBooth?.averageRating != null
-      ? selectedBooth.averageRating.toFixed(1)
-      : "No data";
-
-  const stats = [
-    {
-      title: "Subscription Revenue",
-      value: "No data",
-      subtitle: "No data available",
-      icon: TrendingUp,
-      color: "text-emerald-500",
-      bg: "bg-emerald-50",
-    },
-    {
-      title: "Orders",
-      value: "No data",
-      subtitle: "No data available",
-      icon: Package,
-      color: "text-indigo-600",
-      bg: "bg-indigo-50",
-    },
-    {
-      title: "Rating",
-      value: ratingValue,
-      subtitle: reviewTotal == null ? "No data available" : `From ${reviewTotal} visible reviews`,
-      icon: Star,
-      color: "text-orange-500",
-      bg: "bg-orange-50",
-    },
-  ];
-
-  const yearOptions = Array.from({ length: 3 }, (_, index) => String(today.getFullYear() - 2 + index));
-  const revenueData: { name: string; revenue: number }[] = [];
+  const recentOrders = dashboard?.recentOrders ?? [];
+  const topFoods = dashboard?.topFoods ?? [];
 
   return (
     <div className="p-8 pb-12 max-w-7xl mx-auto space-y-6">
@@ -147,8 +159,8 @@ export function Dashboard() {
           <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
             <Calendar className="w-4 h-4 text-gray-500" />
             <select
-              value={dateRange}
-              onChange={(event) => setDateRange(event.target.value as DateRange)}
+              value={range}
+              onChange={(event) => setRange(event.target.value as DashboardRange)}
               className="bg-transparent text-sm font-medium text-gray-700 outline-none cursor-pointer"
               aria-label="Select dashboard period"
             >
@@ -158,111 +170,161 @@ export function Dashboard() {
               <option value="year">This Year</option>
             </select>
           </div>
-
-          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
-            <Calendar className="w-4 h-4 text-gray-500" />
-            {dateRange === "today" && (
-              <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className="bg-transparent text-sm font-medium text-gray-700 outline-none cursor-pointer" />
-            )}
-            {dateRange === "week" && (
-              <input type="week" value={selectedWeek} onChange={(event) => setSelectedWeek(event.target.value)} className="bg-transparent text-sm font-medium text-gray-700 outline-none cursor-pointer" />
-            )}
-            {dateRange === "month" && (
-              <select value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} className="bg-transparent text-sm font-medium text-gray-700 outline-none cursor-pointer" aria-label="Select month">
-                {Array.from({ length: 12 }, (_, index) => pad(index + 1)).map((month) => (
-                  <option key={month} value={month}>{formatMonthLabel(month)}</option>
-                ))}
-              </select>
-            )}
-            {dateRange === "year" && (
-              <select value={selectedYear} onChange={(event) => setSelectedYear(event.target.value)} className="bg-transparent text-sm font-medium text-gray-700 outline-none cursor-pointer" aria-label="Select year">
-                {yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
-              </select>
-            )}
-          </div>
-
-          {dateRange === "month" && (
-            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
-              <Calendar className="w-4 h-4 text-gray-500" />
-              <select value={selectedMonthYear} onChange={(event) => setSelectedMonthYear(event.target.value)} className="bg-transparent text-sm font-medium text-gray-700 outline-none cursor-pointer" aria-label="Select month year">
-                {yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
-              </select>
-            </div>
-          )}
-
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-600">
-            {periodLabel}
+            {rangeLabels[range].periodLabel}
           </div>
+          <button
+            onClick={() => void loadDashboard()}
+            disabled={loading}
+            className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 text-gray-500 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {stats.map((stat) => (
-          <div key={stat.title} className="bg-white rounded-xl p-5 border border-gray-200 shadow-[0_1px_4px_rgba(0,0,0,0.08)]">
-            <div className="flex justify-between items-start gap-3">
-              <div>
-                <p className="text-sm font-medium text-gray-500">{stat.title}</p>
-                <h3 className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</h3>
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-6 flex flex-col items-center gap-3 text-center">
+          <AlertCircle className="w-8 h-8 text-red-500" />
+          <p className="text-sm font-medium text-red-700">{error}</p>
+          <button
+            onClick={() => void loadDashboard()}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg"
+          >
+            Try Again
+          </button>
+        </div>
+      )}
+
+      {!error && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {loading && !dashboard
+              ? Array.from({ length: 4 }, (_, index) => (
+                  <div key={index} className="bg-white rounded-xl p-5 border border-gray-200 shadow-[0_1px_4px_rgba(0,0,0,0.08)] animate-pulse">
+                    <div className="h-4 w-24 bg-gray-100 rounded" />
+                    <div className="h-7 w-32 bg-gray-100 rounded mt-3" />
+                    <div className="h-3 w-28 bg-gray-100 rounded mt-4" />
+                  </div>
+                ))
+              : stats.map((stat) => (
+                  <div key={stat.title} className="bg-white rounded-xl p-5 border border-gray-200 shadow-[0_1px_4px_rgba(0,0,0,0.08)]">
+                    <div className="flex justify-between items-start gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">{stat.title}</p>
+                        <h3 className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</h3>
+                      </div>
+                      <div className={`p-2 rounded-lg ${stat.bg}`}>
+                        <stat.icon className={`w-5 h-5 ${stat.color}`} />
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-3 font-medium">{stat.subtitle}</p>
+                  </div>
+                ))}
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 shadow-[0_1px_4px_rgba(0,0,0,0.08)] p-6">
+            <h3 className="text-base font-bold text-gray-900 mb-6">{rangeLabels[range].revenueTitle}</h3>
+            {isLockedForCharts ? (
+              <UpgradePrompt packageName="Booth Boost" feature="Revenue trend" />
+            ) : (
+              <div className="h-[250px] w-full relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={revenueData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#6B7280" }} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#6B7280" }} dx={-10} tickFormatter={(value) => `${Number(value) / 1000}K`} />
+                    <Tooltip contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }} formatter={(value) => [`${Number(value ?? 0).toLocaleString()} VND`, "Revenue"]} />
+                    <Line type="monotone" dataKey="revenue" stroke="#4F46E5" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+                {loading && (
+                  <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500 pointer-events-none bg-white/60">Loading...</div>
+                )}
+                {!loading && revenueData.every((point) => point.revenue === 0) && (
+                  <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500 pointer-events-none">No paid revenue in this period yet</div>
+                )}
               </div>
-              <div className={`p-2 rounded-lg ${stat.bg}`}>
-                <stat.icon className={`w-5 h-5 ${stat.color}`} />
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
+            <div className="lg:col-span-7 bg-white rounded-xl border border-gray-200 shadow-[0_1px_4px_rgba(0,0,0,0.08)]">
+              <div className="p-5 border-b border-gray-200 flex justify-between items-center">
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">Recent Orders</h3>
+                  <p className="text-xs text-gray-500 mt-1">The latest 10 orders received by your booth</p>
+                </div>
+                <span className="text-xs font-semibold text-gray-500">
+                  {loading ? "Loading..." : `${recentOrders.length} order${recentOrders.length === 1 ? "" : "s"}`}
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-gray-50 text-gray-500 font-medium">
+                    <tr>
+                      <th className="px-4 py-3 rounded-tl-lg">Order</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Payment</th>
+                      <th className="px-4 py-3 whitespace-nowrap">Total</th>
+                      <th className="px-4 py-3 rounded-tr-lg text-right">Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentOrders.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-12 text-center text-sm text-gray-500">
+                          {loading ? "Loading orders..." : "No orders yet"}
+                        </td>
+                      </tr>
+                    )}
+                    {recentOrders.map((order) => (
+                      <tr key={order.orderId} className="border-b border-gray-50 last:border-0">
+                        <td className="px-4 py-3 font-semibold text-gray-900">#{order.orderCode}</td>
+                        <td className="px-4 py-3"><StatusBadge status={order.status} /></td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs font-bold ${order.isPaid ? "text-emerald-600" : "text-gray-400"}`}>
+                            {order.isPaid ? "Paid" : "Unpaid"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{formatMoney(order.finalAmount)}</td>
+                        <td className="px-4 py-3 text-right text-gray-500 whitespace-nowrap">{formatDateTime(order.createdAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
-            <p className="text-xs text-gray-500 mt-3 font-medium">{stat.subtitle}</p>
-          </div>
-        ))}
-      </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-[0_1px_4px_rgba(0,0,0,0.08)] p-6">
-        <h3 className="text-base font-bold text-gray-900 mb-6">{revenueTitle}</h3>
-        <div className="h-[250px] w-full relative">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={revenueData}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#6B7280" }} dy={10} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#6B7280" }} dx={-10} tickFormatter={(value) => `${Number(value) / 1000000}M`} />
-              <Tooltip contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }} formatter={(value) => [`${Number(value ?? 0).toLocaleString()} VND`, "Revenue"]} />
-              <Line type="monotone" dataKey="revenue" stroke="#4F46E5" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
-            </LineChart>
-          </ResponsiveContainer>
-          <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500 pointer-events-none">No data available</div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
-        <div className="lg:col-span-7 bg-white rounded-xl border border-gray-200 shadow-[0_1px_4px_rgba(0,0,0,0.08)]">
-          <div className="p-5 border-b border-gray-200 flex justify-between items-center">
-            <div>
-              <h3 className="text-base font-bold text-gray-900">Pending Orders</h3>
-              <p className="text-xs text-gray-500 mt-1">New orders waiting for confirmation</p>
+            <div className="lg:col-span-3 bg-white rounded-xl border border-gray-200 shadow-[0_1px_4px_rgba(0,0,0,0.08)] p-6">
+              <h3 className="text-base font-bold text-gray-900 mb-5">Top Selling Items</h3>
+              {isLockedForCharts ? (
+                <UpgradePrompt packageName="Booth Boost" feature="Best-selling analytics" />
+              ) : topFoods.length === 0 ? (
+                <div className="min-h-[180px] flex items-center justify-center text-sm text-gray-500 text-center">
+                  {loading ? "Loading..." : "No completed sales in this period yet"}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {topFoods.map((food, index) => (
+                    <div key={food.foodItemId} className="flex items-center gap-3">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        {index + 1}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{food.foodName}</p>
+                        <p className="text-xs text-gray-500">{food.quantitySold} sold</p>
+                      </div>
+                      <p className="text-xs font-bold text-gray-700 whitespace-nowrap">{formatMoney(food.revenue)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <span className="text-xs font-semibold text-gray-500">No data</span>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 text-gray-500 font-medium">
-                <tr>
-                  <th className="px-4 py-3 text-center w-10 rounded-tl-lg">#</th>
-                  <th className="px-4 py-3">Customer</th>
-                  <th className="px-4 py-3">Items</th>
-                  <th className="px-4 py-3 whitespace-nowrap">Total</th>
-                  <th className="px-4 py-3 rounded-tr-lg text-right">Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-sm text-gray-500">No data available</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="lg:col-span-3 bg-white rounded-xl border border-gray-200 shadow-[0_1px_4px_rgba(0,0,0,0.08)] p-6">
-          <h3 className="text-base font-bold text-gray-900 mb-5">Top Selling Items</h3>
-          <div className="min-h-[180px] flex items-center justify-center text-sm text-gray-500 text-center">No data available</div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }

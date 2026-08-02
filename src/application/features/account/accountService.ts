@@ -11,6 +11,11 @@ export const accountService = {
   updateAvatar: async (avatarUrl: string) => {
     return apiClient.put<BaseResponse<UserProfile>>("/account/avatar", { avatarUrl });
   },
+  uploadAvatar: async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiClient.post<BaseResponse<UserProfile>>("/account/avatar/upload", formData);
+  },
   changePassword: async (data: { currentPassword: string; newPassword: string; confirmNewPassword: string }) => {
     return apiClient.post<BaseResponse<object>>("/account/change-password", data);
   },

@@ -41,6 +41,7 @@ export interface Booth {
   boothOwnerName?: string | null;
   boothOwnerEmail?: string | null;
   zoneId?: string | null;
+  zoneName?: string | null;
   boothName: string;
   boothCode?: string | null;
   description?: string | null;
