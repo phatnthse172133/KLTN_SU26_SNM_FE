@@ -118,6 +118,9 @@ export interface BoothModerationOverview {
   status: BoothModerationStatus;
   averageRating?: number | null;
   complaintCount: number;
+  isFeatured: boolean;
+  packageName?: string | null;
+  packageExpiryDate?: string | null;
   createdAt: string;
   updatedAt: string;
 }

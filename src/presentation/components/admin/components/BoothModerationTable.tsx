@@ -38,6 +38,23 @@ const STATUS_LABEL: Record<BoothModerationStatus, string> = {
   Banned:   'Banned',
 };
 
+const PACKAGE_BADGE: Record<string, string> = {
+  'Booth Featured': 'bg-amber-100 text-amber-700 border-amber-200',
+  'Booth Boost':    'bg-indigo-100 text-indigo-700 border-indigo-200',
+  'Booth Basic':    'bg-slate-100 text-slate-600 border-slate-200',
+};
+
+function PackageTag({ booth }: { booth: BoothModerationOverview }) {
+  const packageName = booth.packageName || 'Booth Basic';
+  const badgeClass = PACKAGE_BADGE[packageName] ?? 'bg-slate-100 text-slate-600 border-slate-200';
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md border whitespace-nowrap ${badgeClass}`}>
+      {booth.isFeatured && <Star className="w-3 h-3 fill-amber-400 text-amber-400 shrink-0" />}
+      {packageName}
+    </span>
+  );
+}
+
 export function BoothModerationTable(props: BoothModerationTableProps) {
   const {
     items, totalItems, isLoading, error,
@@ -151,6 +168,7 @@ export function BoothModerationTable(props: BoothModerationTableProps) {
                   <th className="w-[210px] px-6 py-5 font-medium tracking-wide">Owner</th>
                   <th className="w-[190px] px-6 py-5 font-medium tracking-wide">Night Market</th>
                   <th className="w-[100px] px-6 py-5 font-medium tracking-wide whitespace-nowrap">Rating</th>
+                  <th className="w-[150px] px-6 py-5 font-medium tracking-wide whitespace-nowrap">Package</th>
                   <th className="w-[120px] px-6 py-5 font-medium tracking-wide whitespace-nowrap">Complaints</th>
                   <th className="w-[150px] px-6 py-5 font-medium tracking-wide whitespace-nowrap">Status</th>
                   <th className="min-w-[190px] px-6 py-5 font-medium tracking-wide text-right whitespace-nowrap">Actions</th>
@@ -169,6 +187,7 @@ export function BoothModerationTable(props: BoothModerationTableProps) {
                       <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-32" /></td>
                       <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-32" /></td>
                       <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-12" /></td>
+                      <td className="px-6 py-5"><div className="h-5 bg-slate-200 rounded w-24" /></td>
                       <td className="px-6 py-5"><div className="h-4 bg-slate-200 rounded w-16" /></td>
                       <td className="px-6 py-5"><div className="h-6 bg-slate-200 rounded-full w-20" /></td>
                       <td className="px-6 py-5 text-right"><div className="h-8 bg-slate-200 rounded w-24 inline-block" /></td>
@@ -210,6 +229,9 @@ export function BoothModerationTable(props: BoothModerationTableProps) {
                         ) : (
                           <span className="text-slate-400 text-xs uppercase tracking-wider font-semibold">No rating</span>
                         )}
+                      </td>
+                      <td className="px-6 py-5">
+                        <PackageTag booth={b} />
                       </td>
                       <td className="px-6 py-5">
                         {b.complaintCount > 0 ? (
@@ -258,7 +280,7 @@ export function BoothModerationTable(props: BoothModerationTableProps) {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7} className="px-6 py-24 text-center bg-white">
+                    <td colSpan={8} className="px-6 py-24 text-center bg-white">
                       <div className="flex flex-col items-center justify-center">
                         <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
                           <Store className="w-8 h-8 text-slate-300" />
@@ -320,6 +342,10 @@ export function BoothModerationTable(props: BoothModerationTableProps) {
                     <div>
                       <span className="block text-xs text-slate-500 mb-0.5">Owner</span>
                       <span className="font-medium text-slate-700 truncate block">{b.boothOwnerName || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="block text-xs text-slate-500 mb-0.5">Package</span>
+                      <PackageTag booth={b} />
                     </div>
                     <div>
                       <span className="block text-xs text-slate-500 mb-0.5">Rating & Complaints</span>

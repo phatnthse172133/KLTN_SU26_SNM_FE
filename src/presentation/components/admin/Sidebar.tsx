@@ -19,6 +19,7 @@ import {
   FileText,
   Tag,
   Package,
+  Headphones,
 } from 'lucide-react';
 
 const menuGroups = [
@@ -49,6 +50,7 @@ const menuGroups = [
       { id: '/admin/packages', label: 'Package Management', icon: Package },
       { id: '/admin/subscriptions', label: 'Subscriptions', icon: CreditCard },
       { id: '/admin/notifications', label: 'Notifications', icon: Bell },
+      { id: '/admin/support', label: 'Support Requests', icon: Headphones },
     ],
   },
   {

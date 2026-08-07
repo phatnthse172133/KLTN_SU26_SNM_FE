@@ -12,6 +12,7 @@ import {
   Settings,
   FileText,
   Tag,
+  Headphones,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -46,6 +47,7 @@ const menuGroups = [
     items: [
       { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
       { id: 'notifications', label: 'Notifications', icon: Bell },
+      { id: 'support', label: 'Support Requests', icon: Headphones },
     ],
   },
   {
