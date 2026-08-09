@@ -48,7 +48,8 @@ export function LoginRegister() {
           return;
         }
         login(response.data.accessToken, response.data.refreshToken, response.data.user);
-        router.replace(getLandingPath(response.data.user?.role ?? response.data.role));
+        const normalizedRole = (response.data.user?.role ?? response.data.role)?.replace(/[_\s-]/g, "").toLowerCase();
+        router.replace(normalizedRole === "boothowner" && response.data.user?.mustChangePassword ? "/boothowner/change-password" : getLandingPath(response.data.user?.role ?? response.data.role));
         return;
       }
 

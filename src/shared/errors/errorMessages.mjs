@@ -16,6 +16,7 @@ export const errorMessages = {
 
 /** @type {Record<string, string>} */
 export const businessErrorMessages = {
+  PASSWORD_CHANGE_REQUIRED: "Change your temporary password before using Booth Owner features.",
   SLOT_ALREADY_OCCUPIED: "This slot has already been assigned. Please refresh and try again.",
   SLOT_LIMIT_REACHED: "The slot limit has been reached for this market.",
   MARKET_LIMIT_REACHED: "You have reached the maximum number of markets for your current plan.",

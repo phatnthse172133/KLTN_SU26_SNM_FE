@@ -339,8 +339,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
         else router.replace("/login");
         return;
       }
+
+      // Accounts created by a Market Owner start with a temporary password.
+      // Keep every Booth Owner feature behind the mandatory password change.
+      if (user.mustChangePassword && pathname !== "/boothowner/change-password") {
+        router.replace("/boothowner/change-password");
+      }
     }
-  }, [isAuthenticated, isReady, router, user]);
+  }, [isAuthenticated, isReady, pathname, router, user]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
