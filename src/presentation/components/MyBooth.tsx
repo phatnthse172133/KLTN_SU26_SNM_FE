@@ -276,8 +276,6 @@ export function MyBooth() {
     }
     if ((draftBooth.openTime && !draftBooth.closeTime) || (!draftBooth.openTime && draftBooth.closeTime)) {
       nextErrors.openTime = "Opening and closing times must be provided together.";
-    } else if (draftBooth.openTime && draftBooth.closeTime && draftBooth.openTime >= draftBooth.closeTime) {
-      nextErrors.openTime = "Open time must be earlier than close time.";
     }
     setEditFieldErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
