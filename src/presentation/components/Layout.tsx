@@ -51,6 +51,13 @@ const navItems = [
   { name: "Support", path: "/boothowner/support", icon: HeadphonesIcon },
 ];
 
+const boothNavigationGroups = [
+  { label: "Overview", items: [navItems[0]] },
+  { label: "Management", items: navItems.slice(1, 5) },
+  { label: "Community", items: navItems.slice(5, 7) },
+  { label: "Business", items: navItems.slice(7) },
+];
+
 const searchableRoutes = navItems.map((item) => ({
   type: item.name.includes("Menu") ? "menu" : item.name.includes("Booth") ? "booth" : "page",
   label: item.name,
@@ -315,6 +322,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [showSearch, setShowSearch] = useState(false);
   const [showBell, setShowBell] = useState(false);
   const [showAvatarMenu, setShowAvatarMenu] = useState(false);
+  const [hoveredNavItem, setHoveredNavItem] = useState<string | null>(null);
   const [failedHeaderAvatarUrl, setFailedHeaderAvatarUrl] = useState<string | null>(null);
   const [profileModal, setProfileModal] = useState<null | "profile" | "password">(null);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -367,26 +375,73 @@ export function Layout({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // Do not mount BoothProvider or any feature page while the redirect to the
+  // mandatory password-change screen is taking place. This prevents protected
+  // Booth APIs from being requested with a temporary-password session.
+  if (user.mustChangePassword && pathname !== "/boothowner/change-password") {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center text-sm font-medium text-gray-500">
+        Redirecting you to set a personal password...
+      </div>
+    );
+  }
+
   return (
     <BoothProvider>
       <div className="flex h-screen bg-gray-50 font-sans text-gray-900">
-        <aside className="w-[260px] bg-white border-r border-gray-200 flex flex-col h-full flex-shrink-0">
-          <div className="p-6">
-            <h1 className="text-xl font-bold text-gray-900">Smart Night Market</h1>
-            <p className="text-sm font-medium text-indigo-600 mt-1">Booth Dashboard</p>
+        <aside className="w-64 h-screen flex flex-col flex-shrink-0 bg-white border-r border-gray-200">
+          <div className="p-5 flex items-center gap-3 border-b border-gray-200">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-indigo-600 shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
+              <Store className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Smart Night Market</p>
+              <p className="text-xs text-gray-500">Booth Owner Panel</p>
+            </div>
           </div>
-          <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`);
-              return (
-                <Link key={item.name} href={item.path} className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive ? "bg-indigo-50 text-indigo-600" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"}`}>
-                  <Icon className="w-5 h-5 mr-3 flex-shrink-0" />
-                  {item.name}
-                </Link>
-              );
-            })}
+          <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
+            {boothNavigationGroups.map((group) => (
+              <div key={group.label}>
+                <p className="px-3 mb-2 text-xs font-semibold uppercase tracking-[0.1em] text-slate-700">{group.label}</p>
+                <div className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`);
+                    const isHovered = hoveredNavItem === item.path;
+                    return (
+                      <Link
+                        key={item.name}
+                        href={item.path}
+                        onMouseEnter={() => setHoveredNavItem(item.path)}
+                        onMouseLeave={() => setHoveredNavItem(null)}
+                        className="relative flex w-full items-center gap-3 rounded-lg border-l-2 px-3 py-2.5 text-sm transition-all duration-200"
+                        style={isActive
+                          ? { background: "#F3F4F6", borderLeftColor: "#4F46E5", color: "#111827" }
+                          : isHovered
+                            ? { background: "#FFFFFF", borderLeftColor: "transparent", color: "#334155", transform: "translateX(2px)" }
+                            : { borderLeftColor: "transparent", color: "#475569" }}
+                      >
+                        <Icon className="w-4 h-4 flex-shrink-0" />
+                        <span className="flex-1 text-left">{item.name}</span>
+                        {isActive && <span className="h-1.5 w-1.5 rounded-full bg-indigo-600 shadow-[0_0_6px_rgba(79,70,229,0.45)]" />}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
+          <div className="flex items-center gap-3 border-t border-gray-200 p-4">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-indigo-600 text-xs font-bold text-white">
+              {user?.avatarUrl && failedHeaderAvatarUrl !== user.avatarUrl ? (
+                <Image src={resolveMediaUrl(user.avatarUrl)} alt={user.fullName ?? "Booth Owner"} width={32} height={32} unoptimized className="h-full w-full object-cover" onError={() => setFailedHeaderAvatarUrl(user.avatarUrl!)} />
+              ) : getInitials(user?.fullName)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-gray-900">{user?.fullName ?? "Booth Owner"}</p>
+              <p className="truncate text-xs text-slate-500">Booth Owner</p>
+            </div>
+          </div>
         </aside>
 
         <main className="min-w-0 flex-1 flex flex-col h-screen overflow-hidden">

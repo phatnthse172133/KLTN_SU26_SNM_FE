@@ -20,6 +20,11 @@ export interface BoothOwnerDocument {
   updatedAt: string;
 }
 
+export interface BoothLogoResponse {
+  boothId: string;
+  logoUrl: string | null;
+}
+
 const withFile = (file: File) => {
   const formData = new FormData();
   formData.append("file", file);
@@ -40,7 +45,7 @@ export const boothMediaService = {
     return apiClient.post<BaseResponse<Booth>>(`/booth-owner/booth/images/${imageId}/cover`, {});
   },
   updateLogo: async (file: File) => {
-    return apiClient.put<BaseResponse<Booth>>("/booth-owner/booth/logo", withFile(file));
+    return apiClient.put<BaseResponse<BoothLogoResponse>>("/booth-owner/booth/logo", withFile(file));
   },
   getDocuments: async () => {
     return apiClient.get<BaseResponse<BoothOwnerDocument[]>>("/booth-owner/booth/documents");
