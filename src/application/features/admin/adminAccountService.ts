@@ -21,6 +21,21 @@ export interface ManagedUserResponse {
   avatarUrl?: string | null;
   role: string;        // e.g. "Admin", "BoothOwner", "Customer", "MarketOwner"
   status: string;      // e.g. "Active", "Inactive", "PendingVerification"
+  mustChangePassword: boolean;
+  createdAt: string;
+}
+
+export interface MarketOwnerAccountInvitationResponse {
+  userId: string;
+  userName: string;
+  fullName: string;
+  email: string;
+  role: "MarketOwner";
+  status: string;
+  mustChangePassword: boolean;
+  invitationQueued: boolean;
+  invitationStatus: string;
+  invitationSentAt?: string | null;
   createdAt: string;
 }
 
@@ -95,6 +110,20 @@ export interface UserListQueryParams {
 }
 
 export const adminAccountService = {
+  createMarketOwnerAccount: async (email: string) => {
+    return apiClient.post<BaseResponse<MarketOwnerAccountInvitationResponse>>(
+      "/account/market-owner-accounts",
+      { email }
+    );
+  },
+
+  resendMarketOwnerInvitation: async (marketOwnerId: string) => {
+    return apiClient.post<BaseResponse<MarketOwnerAccountInvitationResponse>>(
+      `/account/market-owner-accounts/${marketOwnerId}/resend-invitation`,
+      {}
+    );
+  },
+
   getUser: async (userId: string) => {
     return apiClient.get<BaseResponse<ManagedUserResponse>>(
       `/account/users/${userId}`

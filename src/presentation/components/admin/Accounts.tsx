@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, Ban, CheckCircle, Mail, Phone, Calendar, Store, MapPin, ArrowLeft, DollarSign, FileText, RotateCw, Loader2, Crown } from 'lucide-react';
+import { Eye, Ban, CheckCircle, Mail, Phone, Calendar, Store, MapPin, ArrowLeft, DollarSign, FileText, RotateCw, Loader2, Crown, UserPlus, Send } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { Modal } from './components/Modal';
 import { Pagination } from './components/Pagination';
@@ -56,6 +56,7 @@ interface AccountListItem {
   boothsOwned?: unknown[];
   activePackageCode?: string;
   activePackageName?: string;
+  mustChangePassword: boolean;
 }
 
 interface BoothDocumentSummary {
@@ -95,6 +96,7 @@ const mapUser = (user: ManagedUserResponse): AccountListItem => ({
   registered: user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US') : 'No data available',
   phone: user.phone || 'No data available',
   address: user.address || 'No data available',
+  mustChangePassword: !!user.mustChangePassword,
 });
 
 const packagePill = (isFree: boolean): React.CSSProperties => ({
@@ -183,6 +185,12 @@ export function Accounts({ initialUserId }: AccountsProps) {
   const [roleCounts, setRoleCounts] = useState({ customer: 0, booth_owner: 0, market_owner: 0 });
   const [statusCounts, setStatusCounts] = useState({ Active: 0, Inactive: 0 });
   const [listError, setListError] = useState<string | null>(null);
+  const [showCreateMarketOwner, setShowCreateMarketOwner] = useState(false);
+  const [marketOwnerEmail, setMarketOwnerEmail] = useState('');
+  const [marketOwnerEmailError, setMarketOwnerEmailError] = useState<string | null>(null);
+  const [createMarketOwnerError, setCreateMarketOwnerError] = useState<string | null>(null);
+  const [creatingMarketOwner, setCreatingMarketOwner] = useState(false);
+  const [resendingInvitationId, setResendingInvitationId] = useState<string | null>(null);
   const itemsPerPage = 12;
 
   useEffect(() => {
@@ -455,6 +463,68 @@ export function Accounts({ initialUserId }: AccountsProps) {
       setShowHistory(true);
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  const closeCreateMarketOwner = () => {
+    if (creatingMarketOwner) return;
+    setShowCreateMarketOwner(false);
+    setMarketOwnerEmail('');
+    setMarketOwnerEmailError(null);
+    setCreateMarketOwnerError(null);
+  };
+
+  const validateMarketOwnerEmail = (value: string): string | null => {
+    const normalized = value.trim();
+    if (!normalized) return 'Market Owner email is required.';
+    if (normalized.length > 150) return 'Email must not exceed 150 characters.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) return 'Enter a valid Market Owner email address.';
+    return null;
+  };
+
+  const handleCreateMarketOwner = async () => {
+    const emailError = validateMarketOwnerEmail(marketOwnerEmail);
+    setMarketOwnerEmailError(emailError);
+    if (emailError) return;
+
+    try {
+      setCreatingMarketOwner(true);
+      setCreateMarketOwnerError(null);
+      const response = await adminAccountService.createMarketOwnerAccount(marketOwnerEmail.trim().toLowerCase());
+      if (!response.success) {
+        setCreateMarketOwnerError(getErrorMessage(response));
+        return;
+      }
+
+      setSuccessMessage(`Market Owner account created for ${response.data.email}. The invitation email is queued for delivery.`);
+      setShowCreateMarketOwner(false);
+      setMarketOwnerEmail('');
+      setRoleTab('market_owner');
+      setStatusTab('Active');
+      setCurrentPage(1);
+    } catch (error: unknown) {
+      setCreateMarketOwnerError(getErrorMessage(error));
+    } finally {
+      setCreatingMarketOwner(false);
+    }
+  };
+
+  const handleResendMarketOwnerInvitation = async (user: AccountListItem) => {
+    try {
+      setResendingInvitationId(user.id);
+      setSuccessMessage(null);
+      setListError(null);
+      const response = await adminAccountService.resendMarketOwnerInvitation(user.id);
+      if (!response.success) {
+        setListError(getErrorMessage(response));
+        return;
+      }
+      setSuccessMessage(`A new invitation email has been queued for ${user.email}.`);
+      await fetchUsers();
+    } catch (error: unknown) {
+      setListError(getErrorMessage(error));
+    } finally {
+      setResendingInvitationId(null);
     }
   };
 
@@ -787,6 +857,18 @@ export function Accounts({ initialUserId }: AccountsProps) {
           <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#111827', margin: 0 }}>User Management</h2>
           <p style={{ color: '#64748B', marginTop: '0.25rem', fontSize: '0.875rem' }}>Manage platform users by role and status</p>
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            setMarketOwnerEmail('');
+            setMarketOwnerEmailError(null);
+            setCreateMarketOwnerError(null);
+            setShowCreateMarketOwner(true);
+          }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.625rem 1rem', border: 'none', borderRadius: '0.625rem', background: '#4F46E5', color: '#FFFFFF', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 12px rgba(79,70,229,0.2)' }}
+        >
+          <UserPlus style={{ width: '1rem', height: '1rem' }} /> Create Market Owner
+        </button>
       </div>
 
       {successMessage && (
@@ -981,6 +1063,11 @@ export function Accounts({ initialUserId }: AccountsProps) {
                             <Crown style={{ width: '0.55rem', height: '0.55rem' }} />
                           </span>
                         )}
+                        {roleTab === 'market_owner' && u.mustChangePassword && (
+                          <span style={{ display: 'inline-flex', marginTop: '0.2rem', padding: '2px 7px', borderRadius: '9999px', background: '#FFF7ED', color: '#C2410C', border: '1px solid #FED7AA', fontSize: '10px', fontWeight: 700 }}>
+                            Invitation pending
+                          </span>
+                        )}
                       </div>
                       <div style={{ minWidth: 0 }}>
                         <span style={{ display: 'block', fontWeight: 500, color: '#111827', fontSize: '0.875rem' }}>{u.name}</span>
@@ -1008,6 +1095,20 @@ export function Accounts({ initialUserId }: AccountsProps) {
                       >
                         <Eye style={{ width: '0.875rem', height: '0.875rem', color: '#64748B' }} />
                       </button>
+
+                      {roleTab === 'market_owner' && u.mustChangePassword && u.status === 'Active' && (
+                        <button
+                          title="Resend invitation"
+                          aria-label={`Resend invitation to ${u.email}`}
+                          disabled={resendingInvitationId === u.id}
+                          onClick={() => void handleResendMarketOwnerInvitation(u)}
+                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '2rem', height: '2rem', borderRadius: '0.5rem', border: '1px solid #C7D2FE', background: '#EEF2FF', cursor: resendingInvitationId === u.id ? 'wait' : 'pointer', opacity: resendingInvitationId === u.id ? 0.6 : 1 }}
+                        >
+                          {resendingInvitationId === u.id
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-600" />
+                            : <Send style={{ width: '0.875rem', height: '0.875rem', color: '#4F46E5' }} />}
+                        </button>
+                      )}
                       
                       {u.status === 'Active' && (
                         <button
@@ -1248,6 +1349,58 @@ export function Accounts({ initialUserId }: AccountsProps) {
           </div>
         </Modal>
       )}
+
+      <Modal
+        isOpen={showCreateMarketOwner}
+        onClose={closeCreateMarketOwner}
+        title="Create Market Owner Account"
+        size="sm"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ padding: '0.875rem', borderRadius: '0.625rem', border: '1px solid #C7D2FE', background: '#EEF2FF', color: '#3730A3', fontSize: '0.8125rem', lineHeight: 1.6 }}>
+            The account will be saved immediately. A temporary password will be sent by email, and the Market Owner must change it at the first sign-in.
+          </div>
+          <div>
+            <label htmlFor="market-owner-email" style={{ display: 'block', marginBottom: '0.375rem', color: '#334155', fontSize: '0.8125rem', fontWeight: 600 }}>
+              Market Owner email <span style={{ color: '#DC2626' }}>*</span>
+            </label>
+            <input
+              id="market-owner-email"
+              type="email"
+              autoComplete="off"
+              maxLength={150}
+              value={marketOwnerEmail}
+              onChange={(event) => {
+                setMarketOwnerEmail(event.target.value);
+                if (marketOwnerEmailError) setMarketOwnerEmailError(null);
+                if (createMarketOwnerError) setCreateMarketOwnerError(null);
+              }}
+              onBlur={() => setMarketOwnerEmailError(validateMarketOwnerEmail(marketOwnerEmail))}
+              placeholder="owner@example.com"
+              aria-invalid={!!marketOwnerEmailError}
+              aria-describedby={marketOwnerEmailError ? 'market-owner-email-error' : undefined}
+              style={{ width: '100%', padding: '0.65rem 0.75rem', borderRadius: '0.5rem', border: `1px solid ${marketOwnerEmailError ? '#FCA5A5' : '#CBD5E1'}`, outline: 'none', fontSize: '0.875rem', color: '#0F172A' }}
+            />
+            {marketOwnerEmailError && (
+              <p id="market-owner-email-error" style={{ margin: '0.35rem 0 0', color: '#DC2626', fontSize: '0.75rem' }}>{marketOwnerEmailError}</p>
+            )}
+          </div>
+          {createMarketOwnerError && (
+            <div role="alert" style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #FECACA', background: '#FEF2F2', color: '#B91C1C', fontSize: '0.8125rem' }}>
+              {createMarketOwnerError}
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+            <button type="button" onClick={closeCreateMarketOwner} disabled={creatingMarketOwner} style={{ padding: '0.55rem 1rem', borderRadius: '0.5rem', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#475569', fontSize: '0.8125rem', fontWeight: 600, cursor: creatingMarketOwner ? 'not-allowed' : 'pointer' }}>
+              Cancel
+            </button>
+            <button type="button" onClick={() => void handleCreateMarketOwner()} disabled={creatingMarketOwner || !!validateMarketOwnerEmail(marketOwnerEmail)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1rem', borderRadius: '0.5rem', border: 'none', background: '#4F46E5', color: '#FFFFFF', fontSize: '0.8125rem', fontWeight: 600, cursor: creatingMarketOwner || !!validateMarketOwnerEmail(marketOwnerEmail) ? 'not-allowed' : 'pointer', opacity: creatingMarketOwner || !!validateMarketOwnerEmail(marketOwnerEmail) ? 0.55 : 1 }}>
+              {creatingMarketOwner ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus style={{ width: '0.875rem', height: '0.875rem' }} />}
+              Create Account
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
