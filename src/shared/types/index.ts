@@ -28,6 +28,7 @@ export interface UserProfile {
   avatarUrl?: string | null;
   role: string;
   status: string;
+  mustChangePassword?: boolean;
   createdAt?: string;
 }
 
