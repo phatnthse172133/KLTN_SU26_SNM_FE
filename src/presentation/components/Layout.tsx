@@ -48,6 +48,7 @@ const navItems = [
   { name: "Reviews", path: "/boothowner/reviews", icon: Star },
   { name: "Sales & Analytics", path: "/boothowner/analytics", icon: TrendingUp },
   { name: "Subscription Packages", path: "/boothowner/fees", icon: CreditCard },
+  { name: "Notifications", path: "/boothowner/notifications", icon: Bell },
   { name: "Support", path: "/boothowner/support", icon: HeadphonesIcon },
 ];
 

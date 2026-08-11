@@ -12,7 +12,7 @@ const categories = [
   ["NightMarket", "Night Market"], ["LayoutAssignment", "Layout & Assignment"], ["Menu", "Menu"],
   ["Order", "Order"], ["Promotion", "Promotion"], ["TechnicalIssue", "Technical Issue"], ["Other", "Other"],
 ];
-const badge = (status: string) => status === "Resolved" || status === "Closed" ? "bg-emerald-50 text-emerald-700" : status === "WaitingForRequester" ? "bg-amber-50 text-amber-700" : status === "InProgress" ? "bg-blue-50 text-blue-700" : "bg-indigo-50 text-indigo-700";
+const badge = (status: string) => status === "Resolved" ? "bg-emerald-50 text-emerald-700" : status === "Rejected" ? "bg-red-50 text-red-700" : status === "InProgress" ? "bg-blue-50 text-blue-700" : "bg-indigo-50 text-indigo-700";
 const displayStatus = (status: string) => status.replace(/([a-z])([A-Z])/g, "$1 $2");
 const formatDate = (value: string) => new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 
