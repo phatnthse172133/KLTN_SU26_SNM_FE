@@ -282,12 +282,12 @@ export function Orders() {
         <div className="hidden overflow-x-auto md:block">
           <table className="w-full min-w-[900px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-              <tr><th className="px-5 py-3">Order</th><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Items</th><th className="px-5 py-3">Total</th><th className="px-5 py-3">Payment</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Created</th><th className="px-5 py-3" /></tr>
+              <tr><th className="px-5 py-3">STT</th><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Items</th><th className="px-5 py-3">Total</th><th className="px-5 py-3">Payment</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Created</th><th className="px-5 py-3" /></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {orders.map((order) => (
+              {orders.map((order, index) => (
                 <tr key={order.orderCode} className="hover:bg-slate-50">
-                  <td className="px-5 py-4 font-bold text-indigo-600">#{order.orderCode}</td>
+                  <td className="px-5 py-4 font-bold text-slate-700">{(page - 1) * pageSize + index + 1}</td>
                   <td className="px-5 py-4 font-semibold text-slate-800">{order.customerName}</td>
                   <td className="px-5 py-4 text-slate-600">{order.itemCount}</td>
                   <td className="px-5 py-4 font-bold text-slate-900">{formatMoney(order.finalAmount)}</td>
