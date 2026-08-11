@@ -12,6 +12,7 @@ import {
   Lock,
   MapPin,
   Package,
+  CreditCard,
   Pause,
   Pencil,
   Phone,
@@ -26,6 +27,10 @@ import { ImageFilePicker } from "./shared/ImageFilePicker";
 import { MultiImageFilePicker, type GalleryImage } from "./shared/MultiImageFilePicker";
 import { useBooth } from "@/application/context/BoothContext";
 import { boothService } from "@/application/features/booth/boothService";
+import {
+  boothPaymentSettingsService,
+  type BoothPaymentSettingsStatus,
+} from "@/application/features/booth/boothPaymentSettingsService";
 import {
   boothMediaService,
   type BoothDocumentType,
@@ -45,7 +50,7 @@ import { useJoinBooth, useOnReconnect } from "@/infrastructure/realtime";
 
 const NO_DATA = "No data available";
 
-type TabKey = "overview" | "images" | "location" | "documents" | "subscription";
+type TabKey = "overview" | "images" | "location" | "documents" | "subscription" | "payment";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "overview", label: "Overview" },
@@ -53,6 +58,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "location", label: "Location" },
   { key: "documents", label: "Documents" },
   { key: "subscription", label: "Subscription" },
+  { key: "payment", label: "Payment settings" },
 ];
 
 const DOCUMENT_TYPES: { type: BoothDocumentType; label: string }[] = [
@@ -190,6 +196,11 @@ export function MyBooth() {
   const [packages, setPackages] = useState<OwnerPackage[]>([]);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
   const [subscriptionError, setSubscriptionError] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState<BoothPaymentSettingsStatus | null>(null);
+  const [paymentStatusLoading, setPaymentStatusLoading] = useState(false);
+  const [paymentStatusError, setPaymentStatusError] = useState("");
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({ clientId: "", apiKey: "", checksumKey: "" });
 
   useEffect(() => {
     setDraftBooth(toDraft(selectedBooth));
@@ -237,6 +248,20 @@ export function MyBooth() {
     }
   }, []);
 
+  const loadPaymentStatus = useCallback(async () => {
+    setPaymentStatusLoading(true);
+    setPaymentStatusError("");
+    try {
+      const response = await boothPaymentSettingsService.getStatus();
+      setPaymentStatus(response.data ?? null);
+    } catch (loadError) {
+      setPaymentStatus(null);
+      setPaymentStatusError(getErrorMessage(loadError));
+    } finally {
+      setPaymentStatusLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!selectedBooth?.id) {
       setGalleryImages([]);
@@ -248,7 +273,8 @@ export function MyBooth() {
     void loadGallery();
     void loadDocuments();
     void loadSubscription(selectedBooth.id);
-  }, [selectedBooth?.id, loadGallery, loadDocuments, loadSubscription]);
+    void loadPaymentStatus();
+  }, [selectedBooth?.id, loadGallery, loadDocuments, loadSubscription, loadPaymentStatus]);
 
   const openEdit = () => {
     setDraftBooth(toDraft(selectedBooth));
@@ -797,6 +823,76 @@ export function MyBooth() {
     </div>
   );
 
+  const savePaymentSettings = async () => {
+    const hasAnyPayInValue = Object.values(paymentForm).some((value) => value.trim().length > 0);
+    const hasEveryPayInValue = Object.values(paymentForm).every((value) => value.trim().length > 0);
+    if (hasAnyPayInValue && !hasEveryPayInValue) {
+      setPaymentStatusError("Enter all three payment account fields, or leave them all blank.");
+      return;
+    }
+
+    setPaymentSaving(true);
+    setPaymentStatusError("");
+    try {
+      await boothPaymentSettingsService.save({
+        clientId: paymentForm.clientId.trim() || undefined,
+        apiKey: paymentForm.apiKey.trim() || undefined,
+        checksumKey: paymentForm.checksumKey.trim() || undefined,
+      });
+      setPaymentForm({ clientId: "", apiKey: "", checksumKey: "" });
+      await loadPaymentStatus();
+      setNotice("Payment account settings saved successfully.");
+    } catch (saveError) {
+      setPaymentStatusError(getErrorMessage(saveError));
+    } finally {
+      setPaymentSaving(false);
+    }
+  };
+
+  const renderPaymentSettingsTab = () => (
+    <div className="max-w-3xl rounded-xl border border-gray-200 bg-white p-6 shadow-[0_1px_4px_rgba(0,0,0,0.08)] space-y-6">
+      <div className="flex items-start gap-3">
+        <div className="rounded-lg bg-indigo-50 p-2.5"><CreditCard className="h-5 w-5 text-indigo-600" /></div>
+        <div>
+          <h4 className="font-bold text-gray-900">Payment account settings</h4>
+          <p className="mt-1 text-sm text-gray-500">Connect the payment account used for your booth&apos;s online orders. Existing secret values are never displayed.</p>
+        </div>
+      </div>
+
+      {paymentStatusLoading ? (
+        <p className="text-sm text-gray-500">Checking payment account status...</p>
+      ) : (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm">
+          <p className="font-medium text-gray-800">Online payments: <span className={paymentStatus?.isPayInConfigured ? "text-emerald-700" : "text-amber-700"}>{paymentStatus?.isPayInConfigured ? "Connected" : "Not connected"}</span></p>
+          {paymentStatus?.updatedAt && <p className="mt-1 text-xs text-gray-500">Last updated: {formatDate(paymentStatus.updatedAt)}</p>}
+        </div>
+      )}
+
+      {paymentStatusError && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{paymentStatusError}</p>}
+
+      <div className="grid gap-4">
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-gray-700">Client ID</span>
+          <input value={paymentForm.clientId} onChange={(event) => setPaymentForm((current) => ({ ...current, clientId: event.target.value }))} autoComplete="off" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-500" placeholder={paymentStatus?.isPayInConfigured ? "Enter a new value only to replace it" : "Enter your client ID"} />
+        </label>
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-gray-700">API key</span>
+          <input type="password" value={paymentForm.apiKey} onChange={(event) => setPaymentForm((current) => ({ ...current, apiKey: event.target.value }))} autoComplete="new-password" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-500" placeholder={paymentStatus?.isPayInConfigured ? "Enter a new value only to replace it" : "Enter your API key"} />
+        </label>
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-gray-700">Checksum key</span>
+          <input type="password" value={paymentForm.checksumKey} onChange={(event) => setPaymentForm((current) => ({ ...current, checksumKey: event.target.value }))} autoComplete="new-password" className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-500" placeholder={paymentStatus?.isPayInConfigured ? "Enter a new value only to replace it" : "Enter your checksum key"} />
+        </label>
+      </div>
+
+      <div className="flex justify-end">
+        <button type="button" onClick={() => void savePaymentSettings()} disabled={paymentSaving} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60">
+          {paymentSaving ? "Saving..." : "Save payment account"}
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="p-8 pb-12 max-w-7xl mx-auto space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -878,6 +974,7 @@ export function MyBooth() {
       {activeTab === "location" && renderLocationTab()}
       {activeTab === "documents" && renderDocumentsTab()}
       {activeTab === "subscription" && renderSubscriptionTab()}
+      {activeTab === "payment" && renderPaymentSettingsTab()}
 
       {isEditOpen && (
         <div className="fixed inset-0 z-50 bg-gray-900/40 flex items-center justify-center p-6">
