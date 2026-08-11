@@ -131,7 +131,7 @@ const daysRemainingFromEndDate = (endDate?: string | null) => {
 };
 
 export function MyBooth() {
-  const { selectedBooth, loading, refreshBooths } = useBooth();
+  const { selectedBooth, loading, error: boothLoadError, notFound: boothNotFound, refreshBooths } = useBooth();
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [draftBooth, setDraftBooth] = useState<BoothDraft>(emptyDraft);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -431,9 +431,22 @@ export function MyBooth() {
           <h2 className="text-2xl font-bold text-gray-900">My Booth</h2>
           <p className="text-sm text-gray-500 mt-1">Manage booth profile, location, hours, package, and verification</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 shadow-[0_1px_4px_rgba(0,0,0,0.08)] p-12 text-center">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-[0_1px_4px_rgba(0,0,0,0.08)] p-10 text-center">
           <Store className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-          <p className="text-sm font-medium text-gray-500">{NO_DATA}</p>
+          {boothNotFound ? (
+            <>
+              <p className="text-sm font-semibold text-gray-700">Your Booth Owner account is ready, but no booth has been created yet.</p>
+              <p className="mt-2 text-sm text-gray-500">Ask the Market Owner to create and assign a booth to your account. Once it is created, you can enter its name, description, contact details, hours, images, and documents here.</p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-semibold text-red-700">We couldn&apos;t load your booth information.</p>
+              <p className="mt-2 text-sm text-gray-500">{boothLoadError ?? "Please try again. If the problem continues, contact Support."}</p>
+              <button type="button" onClick={() => void refreshBooths()} className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+                Retry
+              </button>
+            </>
+          )}
         </div>
       </div>
     );

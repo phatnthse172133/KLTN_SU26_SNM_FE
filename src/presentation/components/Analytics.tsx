@@ -38,6 +38,7 @@ import {
 } from "@/application/features/dashboard/boothDashboardService";
 import { getErrorMessage, isAppError } from "@/shared/errors/errorMapper";
 import type { BaseResponse } from "@/shared/types";
+import { useBooth } from "@/application/context/BoothContext";
 
 const LOCKED_CODES = new Set([
   "ADVANCED_ANALYTICS_NOT_INCLUDED",
@@ -151,14 +152,16 @@ function SectionEmpty({ text }: { text: string }) {
 }
 
 export function Analytics() {
+  const { selectedBooth, loading: boothLoading, notFound: boothNotFound, error: boothError, refreshBooths } = useBooth();
   const [range, setRange] = useState<DashboardRange>("month");
   const [seriesDays, setSeriesDays] = useState(14);
+  const canLoadAnalytics = Boolean(selectedBooth);
 
   const fetchOverview = useCallback(
     (signal?: AbortSignal) => boothDashboardService.getDashboard(range, signal),
     [range]
   );
-  const overview = useSection<BoothDashboard>(fetchOverview, true);
+  const overview = useSection<BoothDashboard>(fetchOverview, canLoadAnalytics);
 
   const tier = overview.data?.entitlements.analyticsTier;
   const tierKnown = tier != null;
@@ -170,19 +173,19 @@ export function Analytics() {
     (signal?: AbortSignal) => boothDashboardService.getRevenueSeries(seriesDays, signal),
     [seriesDays]
   );
-  const series = useSection<RevenueSeries>(fetchSeries, (tierKnown && !growthLocked) || probeAllowed);
+  const series = useSection<RevenueSeries>(fetchSeries, canLoadAnalytics && ((tierKnown && !growthLocked) || probeAllowed));
 
   const fetchAnalytics = useCallback(
     (signal?: AbortSignal) => boothDashboardService.getAnalytics(range, signal),
     [range]
   );
-  const analytics = useSection<BoothAnalytics>(fetchAnalytics, (tierKnown && !growthLocked) || probeAllowed);
+  const analytics = useSection<BoothAnalytics>(fetchAnalytics, canLoadAnalytics && ((tierKnown && !growthLocked) || probeAllowed));
 
   const fetchPromotions = useCallback(
     (signal?: AbortSignal) => boothDashboardService.getPromotionPerformance(signal),
     []
   );
-  const promotions = useSection<PromotionPerformance>(fetchPromotions, (tierKnown && !featuredLocked) || probeAllowed);
+  const promotions = useSection<PromotionPerformance>(fetchPromotions, canLoadAnalytics && ((tierKnown && !featuredLocked) || probeAllowed));
 
   const seriesLocked = growthLocked || series.locked;
   const analyticsLocked = growthLocked || analytics.locked;
@@ -214,6 +217,22 @@ export function Analytics() {
     reviews: point.reviewCount,
   }));
   const summary = analytics.data?.summary;
+
+  if (boothLoading) {
+    return <div className="p-8 text-sm text-slate-500">Loading your booth workspace...</div>;
+  }
+
+  if (!selectedBooth) {
+    return (
+      <div className="mx-auto flex min-h-[60vh] max-w-xl flex-col items-center justify-center px-6 text-center">
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600"><ShoppingBag className="h-7 w-7" /></div>
+        <h1 className="text-xl font-bold text-slate-900">Your booth is not assigned yet</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-500">Sales and analytics are available after a Market Owner assigns a booth slot to your account.</p>
+        {boothError && !boothNotFound && <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{boothError}</p>}
+        <button onClick={() => void refreshBooths()} className="mt-6 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">Check again</button>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 pb-12 max-w-7xl mx-auto space-y-6">

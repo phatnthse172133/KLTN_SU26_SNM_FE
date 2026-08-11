@@ -62,7 +62,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setRefreshToken(null);
             setUser(null);
             setIsAuthenticated(false);
-            router.replace("/login");
+            router.replace(cachedUser?.role?.replace(/[_\s-]/g, "").toLowerCase() === "admin"
+              ? "/admin/login?role=admin"
+              : "/boothowner/login");
             return;
           }
 
@@ -143,7 +145,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRefreshToken(null);
     setUser(null);
     setIsAuthenticated(false);
-    router.replace("/login");
+    router.replace(user?.role?.replace(/[_\s-]/g, "").toLowerCase() === "admin"
+      ? "/admin/login?role=admin"
+      : "/boothowner/login");
   };
 
   return (

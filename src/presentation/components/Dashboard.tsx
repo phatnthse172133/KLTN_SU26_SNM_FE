@@ -11,6 +11,7 @@ import {
   Star,
   TrendingUp,
 } from "lucide-react";
+import { useBooth } from "@/application/context/BoothContext";
 import {
   CartesianGrid,
   Line,
@@ -70,12 +71,18 @@ const rangeLabels: Record<DashboardRange, { revenueTitle: string; periodLabel: s
 };
 
 export function Dashboard() {
+  const { selectedBooth, loading: boothLoading, notFound: boothNotFound, error: boothError, refreshBooths } = useBooth();
   const [range, setRange] = useState<DashboardRange>("week");
   const [dashboard, setDashboard] = useState<BoothDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const loadDashboard = useCallback(async (signal?: AbortSignal) => {
+    if (!selectedBooth) {
+      setDashboard(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -89,13 +96,30 @@ export function Dashboard() {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, [range]);
+  }, [range, selectedBooth]);
 
   useEffect(() => {
+    if (boothLoading) return;
     const controller = new AbortController();
     void Promise.resolve().then(() => loadDashboard(controller.signal));
     return () => controller.abort();
-  }, [loadDashboard]);
+  }, [boothLoading, loadDashboard]);
+
+  if (boothLoading) {
+    return <div className="p-8 text-sm text-slate-500">Loading your booth workspace...</div>;
+  }
+
+  if (!selectedBooth) {
+    return (
+      <div className="mx-auto flex min-h-[60vh] max-w-xl flex-col items-center justify-center px-6 text-center">
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600"><ShoppingBag className="h-7 w-7" /></div>
+        <h1 className="text-xl font-bold text-slate-900">Your booth is not assigned yet</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-500">A Market Owner will create and assign a booth slot to your account. Once assigned, your dashboard, menu, orders, and analytics will appear here.</p>
+        {boothError && !boothNotFound && <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{boothError}</p>}
+        <button onClick={() => void refreshBooths()} className="mt-6 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">Check again</button>
+      </div>
+    );
+  }
 
   const summary = dashboard?.summary;
   const tier = dashboard?.entitlements.analyticsTier ?? "Free";

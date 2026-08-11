@@ -35,7 +35,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const { isReady, isAuthenticated, user } = useAuth();
   const processedEventIds = useRef<Set<string>>(new Set());
 
-  const authKey = (!isReady || !isAuthenticated || !user) ? null : user.id;
+  // Accounts issued by a Market Owner must change their temporary password
+  // before accessing any Booth Owner data. Do not issue notification requests
+  // while that mandatory step is pending: the API correctly rejects them.
+  const canAccessNotifications = isReady && isAuthenticated && !!user && !user.mustChangePassword;
+  const authKey = canAccessNotifications && user ? user.id : null;
   const [prevAuthKey, setPrevAuthKey] = useState<string | null>(authKey);
   if (authKey !== prevAuthKey) {
     setPrevAuthKey(authKey);
@@ -100,7 +104,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, [authKey]);
 
   useEffect(() => {
-    if (!isReady || !isAuthenticated || !user) return;
+    if (!canAccessNotifications) return;
     let cancelled = false;
 
     notificationService.getUnreadCount()
@@ -112,10 +116,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       .catch(() => {});
 
     return () => { cancelled = true; };
-  }, [isReady, isAuthenticated, user]);
+  }, [canAccessNotifications]);
 
   useEffect(() => {
-    if (!isReady || !isAuthenticated) return;
+    if (!canAccessNotifications) return;
 
     const onRealtimeEvent = (e: Event) => {
       const detail = (e as CustomEvent).detail;
@@ -177,7 +181,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("realtime:event", onRealtimeEvent);
       window.removeEventListener("realtime:reconnected", onReconnect);
     };
-  }, [isReady, isAuthenticated, refreshUnreadCount, refreshRecentNotifications]);
+  }, [canAccessNotifications, refreshUnreadCount, refreshRecentNotifications]);
 
   return (
     <NotificationContext.Provider

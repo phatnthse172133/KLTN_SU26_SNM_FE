@@ -14,6 +14,7 @@ export interface CurrentSubscription {
   hasPendingRequest: boolean;
   payOSOrderCode: number | null;
   pendingSubscriptionId: string | null;
+  pendingPackageCode: string | null;
   pendingPackageName: string | null;
   pendingStatus: string | null;
   pendingExpiresAt: string | null;

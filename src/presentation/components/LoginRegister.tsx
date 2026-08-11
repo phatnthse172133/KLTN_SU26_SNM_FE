@@ -27,7 +27,7 @@ export function LoginRegister() {
     if (normalizedRole === "admin") return "/admin";
     if (normalizedRole === "boothowner") return "/boothowner";
     if (normalizedRole === "marketowner") return "/marketowner";
-    return "/login";
+    return "/boothowner/login";
   };
 
   const resetFeedback = () => {

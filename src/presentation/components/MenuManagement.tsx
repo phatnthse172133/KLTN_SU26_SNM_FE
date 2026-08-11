@@ -107,11 +107,15 @@ export function MenuManagement() {
           const uploadedUrl = uploadResponse.data?.url;
           if (uploadedUrl) await menuService.updateFoodItem(selectedBooth.id, foodItemId, { ...payload, thumbnailUrl: uploadedUrl });
           else imageUploaded = false;
-        } catch { imageUploaded = false; }
+        } catch (imageErr) {
+          imageUploaded = false;
+          const imageErrMsg = getErrorMessage(imageErr);
+          showToast("warning", `Menu item ${editingItem ? "updated" : "created"}, but the image could not be uploaded: ${imageErrMsg}`);
+        }
       }
       setShowForm(false); setImageFile(null);
       if (imageUploaded) setNotice(editingItem ? "Menu item updated." : "Menu item created.");
-      else showToast("warning", `Menu item ${editingItem ? "updated" : "created"}, but the image could not be uploaded. You can retry from Edit Item.`);
+      else if (!imageFile) setNotice(editingItem ? "Menu item updated." : "Menu item created.");
       await loadData();
     } catch (saveError) { showToast("error", getErrorMessage(saveError)); }
     finally { setSaving(false); }

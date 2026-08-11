@@ -11,8 +11,15 @@ const onUnauthorized = () => {
   localStorage.removeItem("token");
   localStorage.removeItem("refreshToken");
   localStorage.removeItem("user");
-  if (window.location.pathname !== "/login") {
-    window.location.replace("/login");
+  const path = window.location.pathname;
+  const loginPath = path.startsWith("/admin")
+    ? "/admin/login?role=admin"
+    : path.startsWith("/boothowner")
+      ? "/boothowner/login"
+      : "/login";
+  const isAlreadyOnLogin = path === "/admin/login" || path === "/boothowner/login" || path === "/login";
+  if (!isAlreadyOnLogin) {
+    window.location.replace(loginPath);
   }
 };
 

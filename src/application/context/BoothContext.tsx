@@ -3,12 +3,15 @@ import { createContext, useCallback, useContext, useState, ReactNode, useEffect 
 import { boothService } from "@/application/features/booth/boothService";
 import { useAuth } from "@/application/context/AuthContext";
 import type { Booth } from "@/shared/types";
+import { getErrorMessage, isAppError } from "@/shared/errors/errorMapper";
 
 interface BoothContextType {
   selectedBooth: Booth | null;
   booths: Booth[];
   setSelectedBooth: (booth: Booth | null) => void;
   loading: boolean;
+  error: string | null;
+  notFound: boolean;
   refreshBooths: () => Promise<void>;
 }
 
@@ -20,14 +23,19 @@ export function BoothProvider({ children }: { children: ReactNode }) {
   const [booths, setBooths] = useState<Booth[]>([]);
   const [selectedBooth, setSelectedBooth] = useState<Booth | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
 
   const refreshBooths = useCallback(async () => {
     if (!isReady) return;
 
     setLoading(true);
-    if (!isAuthenticated || normalizeRole(user?.role) !== "boothowner") {
+    setError(null);
+    setNotFound(false);
+    if (!isAuthenticated || normalizeRole(user?.role) !== "boothowner" || user?.mustChangePassword) {
       setBooths([]);
       setSelectedBooth(null);
+      setError(null);
       setLoading(false);
       return;
     }
@@ -36,9 +44,15 @@ export function BoothProvider({ children }: { children: ReactNode }) {
       const boothList = res.data ? [res.data] : [];
       setBooths(boothList);
       setSelectedBooth((current) => boothList.find((booth) => booth.id === current?.id) ?? boothList[0] ?? null);
-    } catch {
+    } catch (boothError) {
       setBooths([]);
       setSelectedBooth(null);
+      // A 404 means the account has not been provisioned with a Booth yet;
+      // other failures must be shown as an API error instead of an empty state.
+      // Keep the distinction in context so every Booth Owner screen can render
+      // an actionable message consistently.
+      setNotFound(isAppError(boothError) && boothError.status === 404);
+      setError(getErrorMessage(boothError));
     } finally {
       setLoading(false);
     }
@@ -50,7 +64,7 @@ export function BoothProvider({ children }: { children: ReactNode }) {
   }, [isReady, refreshBooths]);
 
   return (
-    <BoothContext.Provider value={{ selectedBooth, booths, setSelectedBooth, loading, refreshBooths }}>
+    <BoothContext.Provider value={{ selectedBooth, booths, setSelectedBooth, loading, error, notFound, refreshBooths }}>
       {children}
     </BoothContext.Provider>
   );

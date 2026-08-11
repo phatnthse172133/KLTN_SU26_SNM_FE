@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import Image from 'next/image';
-import { CreditCard, Calendar, Clock, CheckCircle, Package, TrendingUp, History, Store, Copy, ExternalLink, X, RefreshCw, ShieldCheck } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { CreditCard, Calendar, Clock, CheckCircle, Package, TrendingUp, History, Store, ShieldCheck } from 'lucide-react';
 import { useBooth } from '@/application/context/BoothContext';
 import { ownerSubscriptionService, CurrentSubscription, SubscriptionHistoryItem, OwnerPackage, PackagePolicy, PayOSPaymentResponse } from '@/application/features/subscriptions/ownerSubscriptionService';
 import { priceService, PublicPackagePricingOption } from '@/application/features/prices/priceService';
@@ -72,7 +71,7 @@ function getStatusBadge(status: string) {
 
 export function Fees() {
   const { showToast } = useToast();
-  const { selectedBooth, loading: boothLoading, refreshBooths } = useBooth();
+  const { selectedBooth, loading: boothLoading, error: boothLoadError, notFound: boothNotFound, refreshBooths } = useBooth();
   const [current, setCurrent] = useState<CurrentSubscription | null>(null);
   const [history, setHistory] = useState<SubscriptionHistoryItem[]>([]);
   const [packages, setPackages] = useState<OwnerPackage[]>([]);
@@ -92,14 +91,6 @@ export function Fees() {
   const [policyLoading, setPolicyLoading] = useState(false);
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [policyAccepted, setPolicyAccepted] = useState(false);
-
-  // PayOS QR modal state
-  const [payOSData, setPayOSData] = useState<PayOSPaymentResponse | null>(null);
-  const [showQRModal, setShowQRModal] = useState(false);
-  const [polling, setPolling] = useState(false);
-  const [countdown, setCountdown] = useState<number>(0);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const closeSubscriptionModal = useCallback(() => {
     setShowPurchase(false);
@@ -202,6 +193,36 @@ export function Fees() {
     void Promise.resolve().then(loadSubscription);
   }, [loadSubscription]);
 
+  useEffect(() => {
+    if (!current?.pendingSubscriptionId || typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const paymentResult = url.searchParams.get('payment');
+    if (!paymentResult) return;
+    url.searchParams.delete('payment');
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+
+    void (async () => {
+      try {
+        const status = await ownerSubscriptionService.getPaymentStatus(current.pendingSubscriptionId!);
+        if (paymentResult === 'cancelled') {
+          if (status.status !== 'Cancelled' && status.status !== 'Expired') {
+            await ownerSubscriptionService.cancelPayment(current.pendingSubscriptionId!);
+          }
+          showToast('info', 'Payment was cancelled. Your plan has not been changed.');
+        } else if (status.status === 'Active') {
+          showToast('success', 'Payment successful. Your subscription is now active.');
+        } else if (status.status === 'Cancelled' || status.status === 'Expired') {
+          showToast('error', 'Payment was cancelled or expired. You can choose the plan again.');
+        } else {
+          showToast('info', 'We are still confirming your payment. Please check your subscription again shortly.');
+        }
+        await loadSubscription();
+      } catch (error) {
+        showToast('error', getErrorMessage(error));
+      }
+    })();
+  }, [current, loadSubscription, showToast]);
+
   const handlePurchase = async () => {
     if (!selectedPackage || !selectedBooth?.id) return;
 
@@ -248,10 +269,12 @@ export function Fees() {
         closeSubscriptionModal();
         await fetchData();
       } else {
-        setPayOSData(data);
         closeSubscriptionModal();
-        setShowQRModal(true);
-        startPolling(data.subscriptionId, data.expiresAt);
+        if (!data.checkoutUrl) {
+          showToast('error', 'The payment page is unavailable. Please try again later.');
+          return;
+        }
+        window.location.assign(data.checkoutUrl);
       }
     } catch (error) {
       if (isAppError(error) && error.code === 'POLICY_VERSION_MISMATCH') {
@@ -267,53 +290,37 @@ export function Fees() {
     }
   };
 
-  const startPolling = useCallback((subscriptionId: string, expiresAt: string | null) => {
-    setPolling(true);
-    if (expiresAt) {
-      const numericExpiry = Number(expiresAt);
-      const expiryMs = Number.isFinite(numericExpiry) && /^\d+$/.test(expiresAt)
-        ? numericExpiry * 1000
-        : new Date(expiresAt).getTime();
-      const remaining = Math.max(0, Math.floor((expiryMs - Date.now()) / 1000));
-      setCountdown(remaining);
-      countdownRef.current = setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 0) { if (countdownRef.current) clearInterval(countdownRef.current); return 0; }
-          return prev - 1;
-        });
-      }, 1000);
+  const handleContinuePendingPayment = async () => {
+    if (!current?.pendingPackageCode || !selectedBooth?.id) {
+      showToast('error', 'The pending plan could not be identified. Please refresh and try again.');
+      return;
     }
-    pollingRef.current = setInterval(async () => {
-      try {
-        const res = await ownerSubscriptionService.getPaymentStatus(subscriptionId);
-        if (res.status === 'Active') {
-          if (pollingRef.current) clearInterval(pollingRef.current);
-          if (countdownRef.current) clearInterval(countdownRef.current);
-          setPolling(false); setShowQRModal(false); setPayOSData(null);
-          showToast('success', 'Payment successful. Your subscription is now active.');
-          await fetchData();
-        } else if (res.status === 'Cancelled' || res.status === 'Expired') {
-          if (pollingRef.current) clearInterval(pollingRef.current);
-          if (countdownRef.current) clearInterval(countdownRef.current);
-          setPolling(false); setShowQRModal(false); setPayOSData(null);
-          showToast('error', 'Payment was cancelled or expired.');
-          await fetchData();
-        }
-      } catch { /* ignore */ }
-    }, 4000);
-  }, [fetchData, showToast]);
-
-  const handleCancelPayment = async () => {
-    if (!payOSData) return;
+    const pendingPackage = packages.find((pkg) => pkg.code === current.pendingPackageCode);
+    if (!pendingPackage) {
+      showToast('error', 'The pending plan is no longer available. Please contact Support.');
+      return;
+    }
     try {
-      await ownerSubscriptionService.cancelPayment(payOSData.subscriptionId);
-      if (pollingRef.current) clearInterval(pollingRef.current);
-      if (countdownRef.current) clearInterval(countdownRef.current);
-      setPolling(false); setShowQRModal(false); setPayOSData(null);
-      showToast('info', 'Payment has been cancelled.');
-      await fetchData();
+      setSubmitting(true);
+      const data = await ownerSubscriptionService.purchaseBooth(selectedBooth.id, {
+        packageId: pendingPackage.id,
+        durationDays: pendingPackage.durationDays,
+        acceptedPolicy: true,
+      });
+      if (data.status === 'AwaitingWebhook' || data.status === 'AwaitingConfirmation') {
+        showToast('info', 'Your payment was received. We are confirming your plan now.');
+        await fetchData();
+        return;
+      }
+      if (!data.checkoutUrl) {
+        showToast('error', 'The payment page is unavailable. Please try again later.');
+        return;
+      }
+      window.location.assign(data.checkoutUrl);
     } catch (error) {
       showToast('error', getErrorMessage(error));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -331,27 +338,6 @@ export function Fees() {
     }
   };
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      showToast('success', `${label} copied to clipboard.`);
-    }).catch(() => {
-      showToast('error', 'Failed to copy.');
-    });
-  };
-
-  const formatCountdown = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  useEffect(() => {
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-      if (countdownRef.current) clearInterval(countdownRef.current);
-    };
-  }, []);
-
   const renderCurrentFeatures = (packageCode: string | null) => {
     const features = packages.find((pkg) => pkg.code === packageCode)?.features ?? [];
     if (features.length === 0) return null;
@@ -366,7 +352,7 @@ export function Fees() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center">
           <CreditCard className="w-7 h-7 mr-3 text-indigo-600" />
@@ -387,8 +373,10 @@ export function Fees() {
           <div className="flex gap-3">
             <Store className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
             <div>
-              <p className="font-semibold">No booth has been assigned to your account yet.</p>
-              <p className="mt-1 text-sm text-amber-800">You can review available plans now. Purchasing becomes available after a Market Owner assigns your booth.</p>
+              <p className="font-semibold">{boothNotFound ? "Your account does not have a Booth yet." : "We couldn't load your Booth information."}</p>
+              <p className="mt-1 text-sm text-amber-800">{boothNotFound
+                ? "Ask the Market Owner to create a Booth for your account. You can purchase a plan after the Booth is created."
+                : boothLoadError ?? "Please try again or contact Support if the problem continues."}</p>
             </div>
           </div>
           <button type="button" onClick={() => void refreshBooths()} className="shrink-0 text-sm font-semibold text-amber-900 underline">Retry</button>
@@ -437,9 +425,12 @@ export function Fees() {
               <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-semibold">Payment waiting for {current.pendingPackageName || 'your selected plan'}</p>
-                  <p className="mt-1 text-sm text-amber-800">Continue by selecting the same plan again, or cancel this payment before choosing another plan.</p>
+                <p className="mt-1 text-sm text-amber-800">Continue this payment before choosing another plan, or cancel it first.</p>
                 </div>
-                <button type="button" disabled={submitting} onClick={() => void handleCancelExistingPayment()} className="shrink-0 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50">Cancel pending payment</button>
+                <div className="flex shrink-0 gap-2">
+                  <button type="button" disabled={submitting} onClick={() => void handleContinuePendingPayment()} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50">Continue payment</button>
+                  <button type="button" disabled={submitting} onClick={() => void handleCancelExistingPayment()} className="rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50">Cancel</button>
+                </div>
               </div>
             )}
             {current.scheduledSubscriptionId && (
@@ -594,7 +585,11 @@ export function Fees() {
                     </div>
                   )}
 
-                  <button disabled={!!catalogError || !selectedBooth || pricingErrors.has(pkg.id) || isDefaultBoothPlan(pkg.code) || current?.packageCode === pkg.code} onClick={() => { 
+                  <button disabled={!!catalogError || !selectedBooth || pricingErrors.has(pkg.id) || isDefaultBoothPlan(pkg.code) || (current?.packageCode === pkg.code && current?.pendingPackageCode !== pkg.code)} onClick={() => {
+                    if (current?.pendingSubscriptionId && current.pendingPackageCode === pkg.code) {
+                      void handleContinuePendingPayment();
+                      return;
+                    }
                     setSelectedPackage(pkg);
                     const prices = packagePrices[pkg.id] || [];
                     const defaultDuration = pkg.durationDays;
@@ -602,11 +597,13 @@ export function Fees() {
                     setSelectedDuration(hasDefault ? defaultDuration : (prices[0]?.durationDays || null));
                     setIsRenew(false);
                     setShowPurchase(true); 
-                  }} className={`mt-3 w-full px-4 py-2 text-white rounded-lg text-sm font-medium ${(catalogError || !selectedBooth || pricingErrors.has(pkg.id) || isDefaultBoothPlan(pkg.code) || current?.packageCode === pkg.code) ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                  }} className={`mt-3 w-full px-4 py-2 text-white rounded-lg text-sm font-medium ${(catalogError || !selectedBooth || pricingErrors.has(pkg.id) || isDefaultBoothPlan(pkg.code) || (current?.packageCode === pkg.code && current?.pendingPackageCode !== pkg.code)) ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
                     {!selectedBooth
                       ? 'Booth assignment required'
                       : isDefaultBoothPlan(pkg.code)
                       ? 'Included by default'
+                      : current?.pendingPackageCode === pkg.code && current?.pendingSubscriptionId
+                        ? 'Continue payment'
                       : current?.packageCode === pkg.code
                         ? 'Current plan'
                         : getBoothPlanRank(pkg.code) > getBoothPlanRank(current?.packageCode)
@@ -790,67 +787,6 @@ export function Fees() {
         </div>
       </Modal>
 
-      {/* PayOS QR Modal */}
-      {showQRModal && payOSData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
-          <div className="rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" style={{ background: '#FFFFFF' }}>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">Payment Details</h3>
-                <p className="text-sm text-gray-500">{payOSData.packageName} - {payOSData.durationDays} days</p>
-              </div>
-              <button onClick={handleCancelPayment} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            {countdown > 0 && (
-              <div className="rounded-lg p-3 mb-4 flex items-center gap-2" style={{ background: '#FEF3C7' }}>
-                <Clock className="w-4 h-4 text-amber-600" />
-                <span className="text-sm text-amber-700">Time remaining: <strong>{formatCountdown(countdown)}</strong></span>
-                {polling && <span className="ml-auto text-xs text-amber-600 flex items-center gap-1"><RefreshCw className="w-3 h-3 animate-spin" /> Checking...</span>}
-              </div>
-            )}
-            {payOSData.qrCode && (
-              <div className="flex flex-col items-center mb-4">
-                <div className="p-4 rounded-xl" style={{ background: '#FFFFFF', border: '1px solid #E5E7EB' }}>
-                  <Image
-                    src={payOSData.qrCode}
-                    alt="Payment QR Code"
-                    width={192}
-                    height={192}
-                    unoptimized
-                    className="h-48 w-48"
-                  />
-                </div>
-                <p className="text-xs text-gray-500 mt-2">Scan the QR code to complete your payment</p>
-              </div>
-            )}
-            <div className="space-y-2 mb-4">
-              <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: '#F9FAFB' }}>
-                <div><p className="text-xs text-gray-500">Amount</p><p className="text-sm font-bold text-gray-900">{new Intl.NumberFormat('en-US').format(payOSData.amount)} VND</p></div>
-                <button onClick={() => copyToClipboard(String(payOSData.amount), 'Amount')} className="p-1.5 rounded-lg hover:bg-gray-200"><Copy className="w-4 h-4 text-gray-500" /></button>
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: '#F9FAFB' }}>
-                <div><p className="text-xs text-gray-500">Account Number</p><p className="text-sm font-medium text-gray-900">{payOSData.accountNumber}</p></div>
-                <button onClick={() => copyToClipboard(payOSData.accountNumber, 'Account number')} className="p-1.5 rounded-lg hover:bg-gray-200"><Copy className="w-4 h-4 text-gray-500" /></button>
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: '#F9FAFB' }}>
-                <div><p className="text-xs text-gray-500">Account Name</p><p className="text-sm font-medium text-gray-900">{payOSData.accountName}</p></div>
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: '#F9FAFB' }}>
-                <div><p className="text-xs text-gray-500">Description</p><p className="text-sm font-medium text-gray-900">{payOSData.description}</p></div>
-                <button onClick={() => copyToClipboard(payOSData.description, 'Description')} className="p-1.5 rounded-lg hover:bg-gray-200"><Copy className="w-4 h-4 text-gray-500" /></button>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={handleCancelPayment} className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all" style={{ background: '#F3F4F6', color: '#374151' }}>Cancel Payment</button>
-              <a href={payOSData.checkoutUrl} target="_blank" rel="noopener noreferrer" className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-white transition-all flex items-center justify-center gap-2" style={{ background: '#7C3AED' }}>
-                <ExternalLink className="w-4 h-4" /> Open Payment Page
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

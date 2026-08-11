@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/application/context/AuthContext";
 import { Sidebar } from "@/presentation/components/admin/Sidebar";
 import { Header } from "@/presentation/components/admin/Header";
@@ -10,21 +10,28 @@ const normalizeRole = (role?: string | null) => role?.replace(/[_\s-]/g, "").toL
 
 export function AdminLayoutShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { isAuthenticated, isReady, user } = useAuth();
 
+  const isLoginPage = pathname === "/admin/login" || pathname?.startsWith("/admin/login");
+
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || isLoginPage) return;
     if (!isAuthenticated || !user) {
-      router.replace("/login?role=admin");
+      router.replace("/admin/login?role=admin");
       return;
     }
     const role = normalizeRole(user?.role);
     if (role !== "admin") {
       if (role === "boothowner") router.replace("/boothowner");
       else if (role === "marketowner") router.replace("/marketowner");
-      else router.replace("/login");
+      else router.replace("/admin/login?role=admin");
     }
-  }, [isAuthenticated, isReady, router, user]);
+  }, [isAuthenticated, isReady, isLoginPage, router, user]);
+
+  if (isLoginPage) {
+    return <>{children}</>;
+  }
 
   const role = normalizeRole(user?.role);
   if (!isReady || !isAuthenticated || !user || role !== "admin") {

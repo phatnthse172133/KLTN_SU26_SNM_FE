@@ -333,9 +333,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
     ? searchableRoutes.filter((s) => s.label.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 6)
     : [];
 
+  const isLoginPage = pathname === "/boothowner/login" || pathname?.startsWith("/boothowner/login");
+
   useEffect(() => {
-    if (isReady && !isAuthenticated) {
-      router.replace("/login");
+    if (!isReady || isLoginPage) return;
+    if (!isAuthenticated) {
+      router.replace("/boothowner/login");
       return;
     }
 
@@ -344,7 +347,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       if (role !== "boothowner") {
         if (role === "admin") router.replace("/admin");
         else if (role === "marketowner") router.replace("/marketowner");
-        else router.replace("/login");
+        else router.replace("/boothowner/login");
         return;
       }
 
@@ -354,7 +357,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         router.replace("/boothowner/change-password");
       }
     }
-  }, [isAuthenticated, isReady, pathname, router, user]);
+  }, [isAuthenticated, isReady, isLoginPage, pathname, router, user]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -365,6 +368,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  if (isLoginPage) {
+    return <>{children}</>;
+  }
 
   const role = normalizeRole(user?.role);
   if (!isReady || !isAuthenticated || !user || role !== "boothowner") {
