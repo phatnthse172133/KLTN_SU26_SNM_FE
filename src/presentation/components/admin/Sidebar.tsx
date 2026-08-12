@@ -15,7 +15,6 @@ import {
   Star,
   Bell,
   Zap,
-  Settings,
   FileText,
   Tag,
   Package,
@@ -56,7 +55,6 @@ const menuGroups = [
   {
     label: 'AI Management',
     items: [
-      { id: '/admin/ai-settings', label: 'AI Configuration', icon: Settings },
       { id: '/admin/ai-logs', label: 'AI Logs', icon: FileText },
       { id: '/admin/food-tags', label: 'Food Tags', icon: Tag },
     ],
