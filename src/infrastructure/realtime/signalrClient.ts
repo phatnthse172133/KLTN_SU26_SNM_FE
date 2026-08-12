@@ -53,7 +53,7 @@ function getToken(): string | null {
 
 export function createNotificationHubConnection(): HubConnection {
   const baseUrl =
-    process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5282/api";
+    process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
   const hubUrl = buildHubUrl(baseUrl, HUB_NOTIFICATIONS);
 
   return new HubConnectionBuilder()
@@ -67,7 +67,7 @@ export function createNotificationHubConnection(): HubConnection {
 
 export function createChatHubConnection(): HubConnection {
   const baseUrl =
-    process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5282/api";
+    process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
   const hubUrl = buildHubUrl(baseUrl, HUB_CHATS);
 
   return new HubConnectionBuilder()

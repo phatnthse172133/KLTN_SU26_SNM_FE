@@ -4,7 +4,9 @@ import { createAppError } from "@/shared/errors/AppError";
 import { DEFAULT_TIMEOUT_MS, safeJsonParse, serializeBody, buildAuthHeaders } from "./apiInternals.mjs";
 import { createRequest } from "./requestCore.mjs";
 
-export const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5282/api";
+// Deployed apps use the reverse-proxy route. A missing build-time environment
+// value must never make a visitor's browser call its own localhost.
+export const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 
 const onUnauthorized = () => {
   if (typeof window === "undefined") return;

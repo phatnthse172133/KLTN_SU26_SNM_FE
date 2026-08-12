@@ -8,7 +8,7 @@ export const formatCurrency = (amount: number, locale = 'en-US', currency = 'VND
 export const resolveMediaUrl = (url: string | null | undefined): string => {
   if (!url) return '';
   if (url.startsWith('http') || url.startsWith('blob:')) return url;
-  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5282/api";
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? '/api';
   const rootUrl = baseUrl.replace(/\/api\/?$/, '');
   return `${rootUrl}${url.startsWith('/') ? '' : '/'}${url}`;
 };
