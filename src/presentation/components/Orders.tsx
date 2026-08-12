@@ -33,6 +33,8 @@ const statusMeta: Record<number, { label: string; className: string }> = {
   [ORDER_STATUS.Cancelled]: { label: "Cancelled", className: "bg-red-50 text-red-700" },
   [ORDER_STATUS.Underpaid]: { label: "Underpaid", className: "bg-orange-50 text-orange-700" },
   [ORDER_STATUS.Refunded]: { label: "Refunded", className: "bg-slate-100 text-slate-600" },
+  [ORDER_STATUS.PendingPayment]: { label: "Pending payment", className: "bg-amber-50 text-amber-800" },
+  [ORDER_STATUS.PaymentFailed]: { label: "Payment failed", className: "bg-red-50 text-red-700" },
 };
 
 const paymentStatusLabel: Record<number, string> = {
@@ -40,6 +42,11 @@ const paymentStatusLabel: Record<number, string> = {
   [PAYMENT_STATUS.Paid]: "Paid",
   [PAYMENT_STATUS.Failed]: "Failed",
   [PAYMENT_STATUS.Refunded]: "Refunded",
+  [PAYMENT_STATUS.Cancelled]: "Cancelled",
+  [PAYMENT_STATUS.RefundProcessing]: "Refund processing",
+  [PAYMENT_STATUS.Underpaid]: "Underpaid",
+  [PAYMENT_STATUS.Unpaid]: "Unpaid",
+  [PAYMENT_STATUS.Expired]: "Expired",
 };
 
 const formatMoney = (value: number) =>
@@ -112,6 +119,17 @@ export function Orders() {
     return () => controller.abort();
   }, [loadOrders]);
 
+  useEffect(() => {
+    const onRealtime = (event: Event) => {
+      const detail = (event as CustomEvent<{ type?: string }>).detail;
+      const type = detail?.type ?? "";
+      if (!type) return;
+      if (/order|payment|refund/i.test(type)) void loadOrders();
+    };
+    window.addEventListener("realtime:event", onRealtime);
+    return () => window.removeEventListener("realtime:event", onRealtime);
+  }, [loadOrders]);
+
   const openDetail = async (orderCode: number) => {
     setDetailLoading(true);
     setError("");
@@ -133,16 +151,28 @@ export function Orders() {
 
   const updateStatus = async (newStatus: number) => {
     if (!detail) return;
-    let reason: string | undefined;
-    if (newStatus === ORDER_STATUS.Cancelled) {
-      reason = window.prompt("Enter a cancellation reason:")?.trim();
-      if (!reason) return;
-    }
     setActionLoading(true);
     setError("");
     try {
-      await orderService.updateStatus(detail.orderCode, newStatus, reason);
+      await orderService.updateStatus(detail.orderCode, newStatus);
       setNotice("Order status updated successfully.");
+      await refreshDetailAndList(detail.orderCode);
+    } catch (actionError) {
+      setError(getErrorMessage(actionError));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const cancelOrder = async () => {
+    if (!detail) return;
+    const reason = window.prompt("Enter a cancellation reason:")?.trim();
+    if (!reason) return;
+    setActionLoading(true);
+    setError("");
+    try {
+      await orderService.cancelOrder(detail.orderCode, reason);
+      setNotice("Order cancelled successfully.");
       await refreshDetailAndList(detail.orderCode);
     } catch (actionError) {
       setError(getErrorMessage(actionError));
@@ -338,7 +368,7 @@ export function Orders() {
                 </div>
                 <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 p-5">
                   {detail.paymentMethod === PAYMENT_TYPE.Cash && detail.paymentStatus === PAYMENT_STATUS.Pending && <button type="button" disabled={actionLoading} onClick={() => void confirmCash()} className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 px-4 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-50"><Banknote className="h-4 w-4" /> Confirm Cash Payment</button>}
-                  {detail.status === ORDER_STATUS.Placed && <button type="button" disabled={actionLoading} onClick={() => void updateStatus(ORDER_STATUS.Cancelled)} className="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50">Cancel Order</button>}
+                  {detail.status === ORDER_STATUS.Placed && <button type="button" disabled={actionLoading} onClick={() => void cancelOrder()} className="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50">Cancel Order</button>}
                   {nextAction && <button type="button" disabled={actionLoading} onClick={() => void updateStatus(nextAction.status)} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 disabled:bg-slate-300"><CheckCircle2 className="h-4 w-4" /> {actionLoading ? "Updating..." : nextAction.label}</button>}
                 </div>
               </>

@@ -9,10 +9,34 @@ export const ORDER_STATUS = {
   Cancelled: 4,
   Underpaid: 5,
   Refunded: 6,
+  PendingPayment: 7,
+  PaymentFailed: 8,
 } as const;
 
+export const ORDER_STATUS_API: Record<number, string> = {
+  [ORDER_STATUS.Placed]: "PLACED",
+  [ORDER_STATUS.Preparing]: "PREPARING",
+  [ORDER_STATUS.ReadyForPickup]: "READY_FOR_PICKUP",
+  [ORDER_STATUS.Completed]: "COMPLETED",
+  [ORDER_STATUS.Cancelled]: "CANCELLED",
+  [ORDER_STATUS.Underpaid]: "UNDERPAID",
+  [ORDER_STATUS.Refunded]: "REFUNDED",
+  [ORDER_STATUS.PendingPayment]: "PENDING_PAYMENT",
+  [ORDER_STATUS.PaymentFailed]: "PAYMENT_FAILED",
+};
+
 export const PAYMENT_TYPE = { Cash: 0, Online: 1 } as const;
-export const PAYMENT_STATUS = { Pending: 0, Paid: 1, Failed: 2, Refunded: 3 } as const;
+export const PAYMENT_STATUS = {
+  Pending: 0,
+  Paid: 1,
+  Failed: 2,
+  Refunded: 3,
+  Cancelled: 4,
+  RefundProcessing: 5,
+  Underpaid: 6,
+  Unpaid: 7,
+  Expired: 8,
+} as const;
 
 export interface BoothOwnerOrder {
   orderCode: number;
@@ -86,10 +110,15 @@ export const orderService = {
     ),
   createWalkIn: (payload: CreateWalkInOrderPayload) =>
     apiClient.post<BaseResponse<CreatedOrder>>("/Order/booth-owner", payload),
-  updateStatus: (orderCode: number, newStatus: number, reason?: string) =>
+  updateStatus: (orderCode: number, newStatus: number) =>
     apiClient.patch<BaseResponse<boolean>>(`/Order/booth-owner/${orderCode}/status`, {
-      newStatus,
-      reason,
+      status: ORDER_STATUS_API[newStatus] ?? String(newStatus),
+    }),
+  cancelOrder: (orderCode: number, refundReason: string) =>
+    apiClient.put<BaseResponse<boolean>>(`/Order/${orderCode}/BoothOwner/Cancel`, {
+      refundReason,
+      bankBin: null,
+      accountNumber: null,
     }),
   confirmCashPayment: (orderCode: number) =>
     apiClient.post<BaseResponse<boolean>>(
