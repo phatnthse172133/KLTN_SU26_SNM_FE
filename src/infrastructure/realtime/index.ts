@@ -11,7 +11,9 @@ export {
   leaveGroup,
   isDuplicate,
   registerReconnectHandler,
+  registerChatReconnectHandler,
   fireReconnect,
+  fireChatReconnect,
   registerNotificationGroup,
   registerChatGroup,
   rejoinAllNotificationGroups,
@@ -31,4 +33,6 @@ export {
   useJoinSupportTicket,
   useJoinConversation,
   useOnReconnect,
+  useOnChatReconnect,
+  type ChatConnectionState,
 } from "./useRealtime";

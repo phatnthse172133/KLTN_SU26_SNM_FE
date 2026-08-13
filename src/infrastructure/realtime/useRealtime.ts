@@ -19,10 +19,46 @@ import {
   registerNotificationGroup,
   registerChatGroup,
   registerReconnectHandler,
+  registerChatReconnectHandler,
   fireReconnect,
+  fireChatReconnect,
   rejoinAllNotificationGroups,
   rejoinAllChatGroups,
 } from "./signalrClient";
+
+export type ChatConnectionState = "disconnected" | "connecting" | "connected" | "reconnecting";
+
+const chatStateListeners = new Set<(state: ChatConnectionState) => void>();
+let chatConnectionState: ChatConnectionState = "disconnected";
+
+function setChatConnectionState(state: ChatConnectionState) {
+  chatConnectionState = state;
+  chatStateListeners.forEach((listener) => listener(state));
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? value as Record<string, unknown> : null;
+}
+
+function typedChatEvent(eventType: string, payload: unknown): RealtimeEventPayload {
+  const record = asRecord(payload);
+  const id = String(record?.id ?? record?.Id ?? record?.conversationId ?? record?.ConversationId ?? "");
+  return {
+    eventId: id ? `${eventType}:${id}` : "",
+    eventType,
+    occurredAt: String(record?.createdAt ?? record?.CreatedAt ?? record?.readAt ?? record?.ReadAt ?? new Date().toISOString()),
+    recipientId: null,
+    groupName: null,
+    role: null,
+    payload,
+  };
+}
+
+function emitChatEvent(evt: RealtimeEventPayload) {
+  if (!evt || !evt.eventType) return;
+  if (isDuplicate(evt.eventId)) return;
+  chatHandlers.forEach((handler) => handler(evt));
+}
 
 export interface UseRealtimeOptions {
   onEvent?: RealtimeEventHandler;
@@ -85,15 +121,31 @@ async function ensureNotificationConnection() {
 async function ensureChatConnection() {
   if (!chatConn) {
     const connection = createChatHubConnection();
+    connection.onreconnecting(() => {
+      if (chatConn !== connection) return;
+      setChatConnectionState("reconnecting");
+    });
     connection.onreconnected(async () => {
       if (chatConn !== connection) return;
       await rejoinAllChatGroups(connection);
-      fireReconnect();
+      setChatConnectionState("connected");
+      fireChatReconnect();
+    });
+    connection.onclose(() => {
+      if (chatConn !== connection) return;
+      setChatConnectionState("disconnected");
+    });
+    connection.on("MessageCreated", (message: unknown) => {
+      if (chatConn !== connection) return;
+      emitChatEvent(typedChatEvent("MessageCreated", message));
+    });
+    connection.on("ConversationRead", (payload: unknown) => {
+      if (chatConn !== connection) return;
+      emitChatEvent(typedChatEvent("ConversationRead", payload));
     });
     connection.on("RealtimeEvent", (evt: RealtimeEventPayload) => {
-      if (!evt || !evt.eventType) return;
-      if (isDuplicate(evt.eventId)) return;
-      chatHandlers.forEach((h) => h(evt));
+      if (chatConn !== connection) return;
+      emitChatEvent(evt);
     });
     chatConn = connection;
   }
@@ -103,12 +155,18 @@ async function ensureChatConnection() {
   if (connection.state !== HubConnectionState.Disconnected) return;
 
   if (!chatStartPromise) {
+    setChatConnectionState("connecting");
     const startPromise = startConnection(connection)
       .then(async () => {
         if (chatConn === connection) {
           await rejoinAllChatGroups(connection);
-          fireReconnect();
+          setChatConnectionState("connected");
+          fireChatReconnect();
         }
+      })
+      .catch((error) => {
+        setChatConnectionState("disconnected");
+        throw error;
       })
       .finally(() => {
         if (chatStartPromise === startPromise) {
@@ -224,14 +282,25 @@ export function useRealtimeNotifications(
 
 export function useRealtimeChat(
   options: UseRealtimeOptions = {}
-): UseRealtimeResult {
+): UseRealtimeResult & { connectionState: ChatConnectionState } {
   const { onEvent, enabled = true } = options;
   const [connected, setConnected] = useState(false);
+  const [connectionState, setConnectionState] = useState<ChatConnectionState>(chatConnectionState);
   const handlerRef = useRef(onEvent);
 
   useEffect(() => {
     handlerRef.current = onEvent;
   }, [onEvent]);
+
+  useEffect(() => {
+    const unsubscribeState = (() => {
+      const listener = (state: ChatConnectionState) => setConnectionState(state);
+      chatStateListeners.add(listener);
+      setConnectionState(chatConnectionState);
+      return () => { chatStateListeners.delete(listener); };
+    })();
+    return unsubscribeState;
+  }, []);
 
   useEffect(() => {
     if (!enabled) return;
@@ -311,15 +380,17 @@ export function useRealtimeChat(
         await stopConnection(chatConn);
         await startConnection(chatConn);
         await rejoinAllChatGroups(chatConn);
-        fireReconnect();
+        fireChatReconnect();
+        setChatConnectionState("connected");
         setConnected(true);
       } catch {
+        setChatConnectionState("disconnected");
         setConnected(false);
       }
     }
   }, []);
 
-  return { connected, reconnect };
+  return { connected, reconnect, connectionState };
 }
 
 export function useJoinMarket(marketId: string | null | undefined) {
@@ -422,6 +493,13 @@ export function useJoinConversation(conversationId: string | null | undefined) {
 export function useOnReconnect(onReconnect: () => void) {
   useEffect(() => {
     const unregister = registerReconnectHandler(onReconnect);
+    return unregister;
+  }, [onReconnect]);
+}
+
+export function useOnChatReconnect(onReconnect: () => void) {
+  useEffect(() => {
+    const unregister = registerChatReconnectHandler(onReconnect);
     return unregister;
   }, [onReconnect]);
 }
