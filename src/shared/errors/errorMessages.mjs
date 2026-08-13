@@ -97,7 +97,7 @@ export const businessErrorMessages = {
   MARKET_OWNER_INVITATION_ALREADY_ACCEPTED: "This Market Owner already completed the first sign-in. Use password reset instead.",
   BOOTH_DETAILS_UNAVAILABLE: "Booth account details could not be loaded right now. Please reload the page.",
   NOTIFICATION_SERVICE_UNAVAILABLE: "Notifications are temporarily unavailable. Please try again later.",
-  VALIDATION_ERROR: "Please review the package information and try again.",
+  VALIDATION_ERROR: "Some information is invalid. Review the highlighted fields and try again.",
   CHAT_BOOTH_INACTIVE: "This booth is not available for chat right now.",
   CHAT_SELF_CONVERSATION: "You cannot start a conversation with your own booth.",
   CHAT_CONVERSATION_NOT_FOUND: "This conversation is no longer available.",

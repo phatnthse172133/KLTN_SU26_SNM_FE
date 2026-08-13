@@ -77,6 +77,12 @@ const emptyDraft: BoothDraft = {
   closeTime: "",
 };
 
+// HTML time inputs use HH:mm, while ASP.NET's TimeOnly JSON contract requires
+// an ISO time including seconds. Keep each representation explicit so editing
+// an existing booth (including overnight hours) does not fail model binding.
+const toTimeInputValue = (value?: string | null) => value ? value.slice(0, 5) : "";
+const toTimeOnlyPayload = (value: string) => value ? `${value}:00` : null;
+
 const getStatusBadge = (status?: string | null) => {
   switch ((status ?? "").toLowerCase()) {
     case "active":
@@ -108,8 +114,8 @@ const toDraft = (booth: Booth | null): BoothDraft => ({
   boothName: booth?.boothName ?? "",
   description: booth?.description ?? "",
   phoneNumber: booth?.phoneNumber ?? "",
-  openTime: booth?.openTime ?? "",
-  closeTime: booth?.closeTime ?? "",
+  openTime: toTimeInputValue(booth?.openTime),
+  closeTime: toTimeInputValue(booth?.closeTime),
 });
 
 const display = (value?: string | number | null) => {
@@ -289,8 +295,8 @@ export function MyBooth() {
         phoneNumber: draftBooth.phoneNumber ? normalizePhoneNumber(draftBooth.phoneNumber) : null,
         thumbnailUrl: selectedBooth.thumbnailUrl ?? null,
         paymentQrImage: selectedBooth.paymentQrImage ?? null,
-        openTime: draftBooth.openTime || null,
-        closeTime: draftBooth.closeTime || null,
+        openTime: toTimeOnlyPayload(draftBooth.openTime),
+        closeTime: toTimeOnlyPayload(draftBooth.closeTime),
       });
       await refreshBooths();
       setIsEditOpen(false);
