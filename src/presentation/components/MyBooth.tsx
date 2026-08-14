@@ -89,6 +89,69 @@ const emptyDraft: BoothDraft = {
 const toTimeInputValue = (value?: string | null) => value ? value.slice(0, 5) : "";
 const toTimeOnlyPayload = (value: string) => value ? `${value}:00` : null;
 
+const formatMarketSchedule = (open?: string | null, close?: string | null) => {
+  if (!open || !close) return "Not set";
+  if (open === close) return "24 hours";
+  return `${open.slice(0, 5)}-${close.slice(0, 5)}`;
+};
+
+const validateBoothWithinMarketHours = (
+  boothOpen: string,
+  boothClose: string,
+  marketOpen?: string | null,
+  marketClose?: string | null,
+): { field: "openTime" | "closeTime"; message: string } | null => {
+  if (!boothOpen || !boothClose || !marketOpen || !marketClose) return null;
+  if (marketOpen === marketClose) return null;
+
+  const bOpen = boothOpen.slice(0, 5);
+  const bClose = boothClose.slice(0, 5);
+  const mOpen = marketOpen.slice(0, 5);
+  const mClose = marketClose.slice(0, 5);
+  const schedule = formatMarketSchedule(mOpen, mClose);
+
+  const bOpenNum = bOpen < bClose;
+  const mOpenNum = mOpen < mClose;
+
+  let valid: boolean;
+  if (mOpenNum) {
+    if (bOpenNum) {
+      valid = bOpen >= mOpen && bClose <= mClose;
+    } else {
+      valid = false;
+    }
+  } else {
+    if (bOpenNum) {
+      valid = bOpen >= mOpen || bClose <= mClose;
+    } else {
+      valid = bOpen >= mOpen && bClose <= mClose;
+    }
+  }
+
+  if (valid) return null;
+
+  if (bOpenNum && mOpenNum) {
+    if (bOpen < mOpen)
+      return { field: "openTime", message: `Booth opening time ${bOpen} is earlier than the market's opening time ${mOpen}. Choose a time within the market schedule: ${schedule}.` };
+    return { field: "closeTime", message: `Booth closing time ${bClose} is later than the market's closing time ${mClose}. Choose a time within the market schedule: ${schedule}.` };
+  }
+  if (bOpenNum && !mOpenNum) {
+    if (bOpen < mOpen && bClose > mClose)
+      return { field: "openTime", message: `Booth schedule ${bOpen}-${bClose} falls outside the market schedule ${schedule}. The booth must operate entirely within the market's hours.` };
+    if (bOpen < mOpen)
+      return { field: "openTime", message: `Booth opening time ${bOpen} is earlier than the market's opening time ${mOpen}. Choose a time within the market schedule: ${schedule}.` };
+    return { field: "closeTime", message: `Booth closing time ${bClose} is later than the market's closing time ${mClose}. Choose a time within the market schedule: ${schedule}.` };
+  }
+  if (!bOpenNum && mOpenNum) {
+    return { field: "openTime", message: `Booth schedule ${bOpen}-${bClose} spans midnight but the market schedule ${schedule} does not. The booth must operate entirely within the market's hours.` };
+  }
+  if (bOpen < mOpen)
+    return { field: "openTime", message: `Booth opening time ${bOpen} is earlier than the market's opening time ${mOpen}. Choose a time within the market schedule: ${schedule}.` };
+  if (bClose > mClose)
+    return { field: "closeTime", message: `Booth closing time ${bClose} is later than the market's closing time ${mClose}. Choose a time within the market schedule: ${schedule}.` };
+  return { field: "openTime", message: `Booth schedule ${bOpen}-${bClose} falls outside the market schedule ${schedule}. The booth must operate entirely within the market's hours.` };
+};
+
 const getStatusBadge = (status?: string | null) => {
   switch ((status ?? "").toLowerCase()) {
     case "active":
@@ -311,6 +374,15 @@ export function MyBooth() {
     }
     if (draftBooth.openTime && draftBooth.closeTime && draftBooth.openTime === draftBooth.closeTime) {
       nextErrors.openTime = "Opening and closing times cannot be the same. Use 00:00 for overnight if needed.";
+    }
+    const marketHoursError = validateBoothWithinMarketHours(
+      draftBooth.openTime,
+      draftBooth.closeTime,
+      selectedBooth?.marketOpeningHours,
+      selectedBooth?.marketClosingHours,
+    );
+    if (marketHoursError) {
+      nextErrors[marketHoursError.field] = marketHoursError.message;
     }
     setEditFieldErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
@@ -1020,10 +1092,19 @@ export function MyBooth() {
                 <span className="text-sm font-medium text-gray-700">Close Time</span>
                 <input type="time" value={draftBooth.closeTime} onChange={(e) => {
                   setDraftBooth({ ...draftBooth, closeTime: e.target.value });
-                  setEditFieldErrors((current) => ({ ...current, openTime: "" }));
+                  setEditFieldErrors((current) => ({ ...current, closeTime: "", openTime: "" }));
                 }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500" />
-                {editFieldErrors.openTime && <p className="text-xs text-red-600">{editFieldErrors.openTime}</p>}
+                {editFieldErrors.closeTime && <p className="text-xs text-red-600">{editFieldErrors.closeTime}</p>}
               </label>
+              {selectedBooth?.marketOpeningHours && selectedBooth?.marketClosingHours && (
+                <div className="md:col-span-2 rounded-lg bg-blue-50 border border-blue-200 px-4 py-2.5 text-xs text-blue-700 flex items-center gap-2">
+                  <Clock className="w-4 h-4 shrink-0" />
+                  <span>
+                    Market schedule: {formatMarketSchedule(selectedBooth.marketOpeningHours, selectedBooth.marketClosingHours)}
+                    {selectedBooth.marketOpeningHours !== selectedBooth.marketClosingHours && " — booth hours must fall within this range."}
+                  </span>
+                </div>
+              )}
               {draftBooth.openTime && draftBooth.closeTime && draftBooth.openTime !== draftBooth.closeTime && (
                 <div className="md:col-span-2 rounded-lg bg-indigo-50 border border-indigo-200 px-4 py-3 text-xs text-indigo-700 flex items-center gap-2">
                   <Clock className="w-4 h-4 shrink-0" />
