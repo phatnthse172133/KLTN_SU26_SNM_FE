@@ -6,7 +6,7 @@ export const APP_MESSAGES = {
   // MSG-03
   LOGIN_ERROR_UNVERIFIED: "Your account has not been verified. Please check your email.",
   // MSG-04
-  LOGIN_ERROR_BANNED: "Your account has been suspended. Please contact support for assistance.",
+  LOGIN_ERROR_BANNED: "Your account has been banned. Please contact support for assistance.",
   // MSG-05
   PASSWORD_RECOVERY_SENT: "Password recovery instructions have been sent to your registered email.",
   // MSG-06

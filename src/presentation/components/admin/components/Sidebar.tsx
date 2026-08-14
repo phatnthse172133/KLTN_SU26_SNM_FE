@@ -9,7 +9,6 @@ import {
   Star,
   Bell,
   Zap,
-  Settings,
   FileText,
   Tag,
   Headphones,
@@ -53,7 +52,6 @@ const menuGroups = [
   {
     label: 'AI Management',
     items: [
-      { id: 'ai-settings', label: 'AI Configuration', icon: Settings },
       { id: 'ai-logs', label: 'AI Logs', icon: FileText },
       { id: 'food-tags', label: 'Food Tags', icon: Tag },
     ],

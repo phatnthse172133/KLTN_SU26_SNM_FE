@@ -309,6 +309,9 @@ export function MyBooth() {
     if ((draftBooth.openTime && !draftBooth.closeTime) || (!draftBooth.openTime && draftBooth.closeTime)) {
       nextErrors.openTime = "Opening and closing times must be provided together.";
     }
+    if (draftBooth.openTime && draftBooth.closeTime && draftBooth.openTime === draftBooth.closeTime) {
+      nextErrors.openTime = "Opening and closing times cannot be the same. Use 00:00 for overnight if needed.";
+    }
     setEditFieldErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
@@ -500,7 +503,9 @@ export function MyBooth() {
     {
       label: "Operating Hours",
       value: selectedBooth.openTime || selectedBooth.closeTime
-        ? `${selectedBooth.openTime || "No data"} - ${selectedBooth.closeTime || "No data"}`
+        ? (selectedBooth.openTime && selectedBooth.closeTime && selectedBooth.openTime > selectedBooth.closeTime
+          ? `${selectedBooth.openTime} - ${selectedBooth.closeTime} (next day)`
+          : `${selectedBooth.openTime || "No data"} - ${selectedBooth.closeTime || "No data"}`)
         : null,
       icon: Clock,
     },
@@ -1017,7 +1022,24 @@ export function MyBooth() {
                   setDraftBooth({ ...draftBooth, closeTime: e.target.value });
                   setEditFieldErrors((current) => ({ ...current, openTime: "" }));
                 }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500" />
+                {editFieldErrors.openTime && <p className="text-xs text-red-600">{editFieldErrors.openTime}</p>}
               </label>
+              {draftBooth.openTime && draftBooth.closeTime && draftBooth.openTime !== draftBooth.closeTime && (
+                <div className="md:col-span-2 rounded-lg bg-indigo-50 border border-indigo-200 px-4 py-3 text-xs text-indigo-700 flex items-center gap-2">
+                  <Clock className="w-4 h-4 shrink-0" />
+                  <span>
+                    {draftBooth.openTime > draftBooth.closeTime
+                      ? `Overnight schedule: opens at ${draftBooth.openTime} and closes at ${draftBooth.closeTime} the next day.`
+                      : `Schedule: opens at ${draftBooth.openTime} and closes at ${draftBooth.closeTime}.`}
+                  </span>
+                </div>
+              )}
+              {!draftBooth.openTime && !draftBooth.closeTime && (
+                <div className="md:col-span-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-700 flex items-center gap-2">
+                  <Clock className="w-4 h-4 shrink-0" />
+                  <span>No operating hours set. Customers can view your menu but cannot place orders.</span>
+                </div>
+              )}
               <label className="md:col-span-2 space-y-1.5">
                 <span className="text-sm font-medium text-gray-700">Description</span>
                 <textarea value={draftBooth.description} onChange={(e) => setDraftBooth({ ...draftBooth, description: e.target.value })} rows={4} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500 resize-none" />

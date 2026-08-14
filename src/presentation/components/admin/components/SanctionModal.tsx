@@ -24,10 +24,10 @@ export function SanctionModal({ isOpen, onClose, targetName, targetType, current
 
   const isBooth = targetType === 'Booth';
   const isSanctioning = isBooth ? currentStatus !== 'Banned' : currentStatus === 'Active';
-  const sanctionVerb = isBooth ? 'ban' : 'suspend';
-  const sanctionPastVerb = isBooth ? 'banned' : 'suspended';
-  const sanctionNoun = isBooth ? 'ban' : 'suspension';
-  const sanctionTitle = isBooth ? 'Ban Booth' : `Suspend ${targetType}`;
+  const sanctionVerb = 'ban';
+  const sanctionPastVerb = 'banned';
+  const sanctionNoun = 'ban';
+  const sanctionTitle = `Ban ${targetType}`;
   const restoreTitle = isBooth ? 'Restore Booth' : `Restore ${targetType}`;
 
 
@@ -90,7 +90,7 @@ export function SanctionModal({ isOpen, onClose, targetName, targetType, current
           {/* Warning Box */}
           <div className={`p-4 rounded-xl border text-sm ${isSanctioning ? 'bg-red-50 border-red-200 text-red-800' : 'bg-blue-50 border-blue-200 text-blue-800'}`}>
             {isSanctioning ? (
-              <p>{isBooth ? 'Banning' : 'Suspending'} this {targetType.toLowerCase()} will immediately hide it from public view and notify the owner. Active services may be interrupted.</p>
+              <p>Banning this {targetType.toLowerCase()} will immediately hide it from public view and notify the owner. Active services may be interrupted.</p>
             ) : (
               <p>Restoring this {targetType.toLowerCase()} will {isBooth ? 'lift the ban and notify the owner' : 'reactivate it on the platform and notify the owner'}. Ensure all violations have been resolved.</p>
             )}
@@ -164,7 +164,7 @@ export function SanctionModal({ isOpen, onClose, targetName, targetType, current
                 Processing...
               </>
             ) : (
-              isSanctioning ? (isBooth ? 'Ban Now' : 'Suspend Now') : 'Restore Now'
+              isSanctioning ? 'Ban Now' : 'Restore Now'
             )}
           </button>
         </div>

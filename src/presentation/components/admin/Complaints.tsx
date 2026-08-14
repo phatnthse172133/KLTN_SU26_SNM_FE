@@ -563,7 +563,7 @@ export function Complaints({ initialComplaintId }: ComplaintsProps = {}) {
                   {needsPolicyViolation && (
                     <textarea
                       value={resolvePolicyViolation} onChange={e => setResolvePolicyViolation(e.target.value)}
-                      placeholder="Describe the policy violation (required for Warning/Suspend)..."
+                      placeholder="Describe the policy violation (required for Warning/Ban)..."
                       rows={2} disabled={submitting}
                       style={{ width: '100%', padding: '0.5rem 0.75rem', background: '#F1F5F9', border: '1px solid rgba(217,119,6,0.3)', borderRadius: '0.5rem', fontSize: '0.875rem', color: '#374151', outline: 'none', resize: 'vertical', boxSizing: 'border-box', marginBottom: '0.75rem', opacity: submitting ? 0.6 : 1 }}
                     />

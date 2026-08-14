@@ -702,7 +702,7 @@ export function Accounts({ initialUserId }: AccountsProps) {
                           disabled
                           style={{ padding: '0.5rem 0.75rem', background: '#FEF2F2', border: '1px solid #FEE2E2', color: '#EF4444', borderRadius: '0.375rem', fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
                         >
-                          <Ban style={{ width: '0.875rem', height: '0.875rem' }} /> Suspend Booth
+                          <Ban style={{ width: '0.875rem', height: '0.875rem' }} /> Ban Booth
                         </button>
                       ) : (
                         <button

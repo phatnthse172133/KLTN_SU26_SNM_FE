@@ -34,7 +34,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/application/context/AuthContext";
-import { getErrorMessage } from "@/shared/errors/errorMapper";
+import { getErrorMessage, isAppError } from "@/shared/errors/errorMapper";
 import { normalizePhoneNumber, validatePhoneNumber } from "@/shared/utils/phoneUtils";
 import { resolveMediaUrl } from "@/shared/utils";
 
@@ -73,21 +73,24 @@ const getInitials = (name?: string | null) => {
 
 const normalizeRole = (role?: string | null) => role?.replace(/[_\s-]/g, "").toLowerCase();
 
-function PasswordInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+function PasswordInput({ value, onChange, placeholder, error }: { value: string; onChange: (v: string) => void; placeholder: string; error?: string }) {
   const [show, setShow] = useState(false);
   return (
-    <div className="relative">
-      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-      <input
-        type={show ? "text" : "password"}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full pl-9 pr-10 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-indigo-500 transition-colors"
-      />
-      <button type="button" onClick={() => setShow(!show)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-        {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-      </button>
+    <div>
+      <div className="relative">
+        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <input
+          type={show ? "text" : "password"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className={`w-full pl-9 pr-10 py-2.5 border rounded-lg text-sm outline-none focus:border-indigo-500 transition-colors ${error ? "border-red-400" : "border-gray-200"}`}
+        />
+        <button type="button" onClick={() => setShow(!show)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+          {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+        </button>
+      </div>
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   );
 }
@@ -107,6 +110,7 @@ function ProfileModal({ onClose, initialTab = "profile" }: { onClose: () => void
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [pwError, setPwError] = useState("");
+  const [pwFieldErrors, setPwFieldErrors] = useState<{ currentPassword?: string; newPassword?: string; confirmPassword?: string }>({});
   const [pwSaved, setPwSaved] = useState(false);
   const [avatarSaving, setAvatarSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -162,28 +166,34 @@ function ProfileModal({ onClose, initialTab = "profile" }: { onClose: () => void
     }
 
     try {
-        setAvatarSaving(true);
-        setProfileError("");
-        const response = await accountService.uploadAvatar(file);
-        if (response.data) {
-          updateUser(response.data);
-          setProfileSaved(true);
-          if (profileTimerRef.current) clearTimeout(profileTimerRef.current);
-          profileTimerRef.current = setTimeout(() => setProfileSaved(false), 3000);
-        }
-    } catch(err) {
-        setProfileError(getErrorMessage(err));
+      setAvatarSaving(true);
+      setProfileError("");
+      const response = await accountService.uploadAvatar(file);
+      if (response.data) {
+        updateUser(response.data);
+        setProfileSaved(true);
+        if (profileTimerRef.current) clearTimeout(profileTimerRef.current);
+        profileTimerRef.current = setTimeout(() => setProfileSaved(false), 3000);
+      }
+    } catch (err) {
+      setProfileError(getErrorMessage(err));
     } finally {
-        setAvatarSaving(false);
-        if (fileInputRef.current) fileInputRef.current.value = "";
+      setAvatarSaving(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
   const savePassword = async () => {
     setPwError("");
-    if (!currentPw) { setPwError("Current password is required."); return; }
-    if (newPw.length < 6) { setPwError("New password must be at least 6 characters."); return; }
-    if (newPw !== confirmPw) { setPwError("Passwords do not match."); return; }
+    setPwFieldErrors({});
+    const fieldErrors: { currentPassword?: string; newPassword?: string; confirmPassword?: string } = {};
+    if (!currentPw) fieldErrors.currentPassword = "Current password is required.";
+    if (!newPw) fieldErrors.newPassword = "New password is required.";
+    else if (newPw.length < 6) fieldErrors.newPassword = "New password must be at least 6 characters.";
+    if (!confirmPw) fieldErrors.confirmPassword = "Please confirm your new password.";
+    else if (newPw && newPw !== confirmPw) fieldErrors.confirmPassword = "Passwords do not match.";
+    if (newPw && currentPw && newPw === currentPw) fieldErrors.newPassword = "New password must be different from the current password.";
+    if (Object.keys(fieldErrors).length > 0) { setPwFieldErrors(fieldErrors); return; }
     try {
       await accountService.changePassword({ currentPassword: currentPw, newPassword: newPw, confirmNewPassword: confirmPw });
       setCurrentPw(""); setNewPw(""); setConfirmPw("");
@@ -191,7 +201,19 @@ function ProfileModal({ onClose, initialTab = "profile" }: { onClose: () => void
       if (pwTimerRef.current) clearTimeout(pwTimerRef.current);
       pwTimerRef.current = setTimeout(() => setPwSaved(false), 3000);
     } catch (error) {
-      setPwError(getErrorMessage(error));
+      if (isAppError(error)) {
+        const backendFieldErrors = error.fieldErrors ?? {};
+        const nextErrors: { currentPassword?: string; newPassword?: string; confirmPassword?: string } = {};
+        if (error.code === "CURRENT_PASSWORD_INVALID") nextErrors.currentPassword = error.message;
+        else if (backendFieldErrors.currentPassword?.[0]) nextErrors.currentPassword = backendFieldErrors.currentPassword[0];
+        if (error.code === "PASSWORD_REUSE_NOT_ALLOWED") nextErrors.newPassword = error.message;
+        else if (backendFieldErrors.newPassword?.[0]) nextErrors.newPassword = backendFieldErrors.newPassword[0];
+        if (backendFieldErrors.confirmNewPassword?.[0]) nextErrors.confirmPassword = backendFieldErrors.confirmNewPassword[0];
+        if (Object.keys(nextErrors).length > 0) setPwFieldErrors(nextErrors);
+        else setPwError(error.message);
+      } else {
+        setPwError(getErrorMessage(error));
+      }
     }
   };
 
@@ -303,9 +325,9 @@ function ProfileModal({ onClose, initialTab = "profile" }: { onClose: () => void
           <div className="px-6 pt-5 pb-6 space-y-4">
             {pwError && <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2.5 text-sm"><AlertCircle className="w-4 h-4 flex-shrink-0" /> {pwError}</div>}
             {pwSaved && <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg px-3 py-2.5 text-sm font-medium"><CheckCircle2 className="w-4 h-4" /> Password updated successfully</div>}
-            <div><label className="text-xs font-medium text-gray-500 mb-1.5 block">Current Password</label><PasswordInput value={currentPw} onChange={setCurrentPw} placeholder="Enter current password" /></div>
-            <div><label className="text-xs font-medium text-gray-500 mb-1.5 block">New Password</label><PasswordInput value={newPw} onChange={setNewPw} placeholder="At least 6 characters" /></div>
-            <div><label className="text-xs font-medium text-gray-500 mb-1.5 block">Confirm New Password</label><PasswordInput value={confirmPw} onChange={setConfirmPw} placeholder="Re-enter new password" /></div>
+            <div><label className="text-xs font-medium text-gray-500 mb-1.5 block">Current Password</label><PasswordInput value={currentPw} onChange={(v) => { setCurrentPw(v); setPwFieldErrors((prev) => ({ ...prev, currentPassword: undefined })); }} placeholder="Enter current password" error={pwFieldErrors.currentPassword} /></div>
+            <div><label className="text-xs font-medium text-gray-500 mb-1.5 block">New Password</label><PasswordInput value={newPw} onChange={(v) => { setNewPw(v); setPwFieldErrors((prev) => ({ ...prev, newPassword: undefined })); }} placeholder="At least 6 characters" error={pwFieldErrors.newPassword} /></div>
+            <div><label className="text-xs font-medium text-gray-500 mb-1.5 block">Confirm New Password</label><PasswordInput value={confirmPw} onChange={(v) => { setConfirmPw(v); setPwFieldErrors((prev) => ({ ...prev, confirmPassword: undefined })); }} placeholder="Re-enter new password" error={pwFieldErrors.confirmPassword} /></div>
             <button onClick={savePassword} className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 rounded-xl text-sm font-semibold text-white transition-colors mt-2">Update Password</button>
           </div>
         )}

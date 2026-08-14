@@ -1,9 +1,17 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { CreditCard, Calendar, Clock, CheckCircle, Package, TrendingUp, History, Store, ShieldCheck } from 'lucide-react';
+import { CreditCard, Calendar, Clock, CheckCircle, Package, TrendingUp, History, Store, ShieldCheck, X, Eye } from 'lucide-react';
 import { useBooth } from '@/application/context/BoothContext';
-import { ownerSubscriptionService, CurrentSubscription, SubscriptionHistoryItem, OwnerPackage, PackagePolicy, PayOSPaymentResponse } from '@/application/features/subscriptions/ownerSubscriptionService';
+import {
+  ownerSubscriptionService,
+  CurrentSubscription,
+  SubscriptionHistoryItem,
+  OwnerPackage,
+  PackagePolicy,
+  PayOSPaymentResponse,
+  SubscriptionQuoteResponse,
+} from '@/application/features/subscriptions/ownerSubscriptionService';
 import { priceService, PublicPackagePricingOption } from '@/application/features/prices/priceService';
 import { Modal } from '@/presentation/components/admin/components/Modal';
 import { useToast } from '@/presentation/components/shared/ToastContext';
@@ -46,6 +54,17 @@ function formatPrice(p: number) {
 function formatDate(d: string | null) {
   if (!d) return 'N/A';
   return new Date(d).toLocaleDateString('en-US');
+}
+
+function formatDateTime(d: string | null) {
+  if (!d) return 'N/A';
+  return new Date(d).toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function getStatusBadge(status: string) {
@@ -91,6 +110,11 @@ export function Fees() {
   const [policyLoading, setPolicyLoading] = useState(false);
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [policyAccepted, setPolicyAccepted] = useState(false);
+  const [quoteData, setQuoteData] = useState<SubscriptionQuoteResponse | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [priceRefreshConfirmation, setPriceRefreshConfirmation] = useState<{ quoteAmount: number; actualAmount: number; checkoutUrl: string } | null>(null);
+  const [selectedHistoryDetail, setSelectedHistoryDetail] = useState<SubscriptionHistoryItem | null>(null);
 
   const closeSubscriptionModal = useCallback(() => {
     setShowPurchase(false);
@@ -100,6 +124,8 @@ export function Fees() {
     setSelectedPolicy(null);
     setPolicyError(null);
     setPolicyAccepted(false);
+    setQuoteData(null);
+    setQuoteError(null);
   }, []);
 
   const loadSelectedPolicy = useCallback(async (packageId: string) => {
@@ -117,10 +143,29 @@ export function Fees() {
     }
   }, []);
 
+  const loadQuote = useCallback(async (packageId: string, durationDays: number | null) => {
+    if (!selectedBooth?.id) return;
+    try {
+      setQuoteLoading(true);
+      setQuoteError(null);
+      const quote = await ownerSubscriptionService.quoteBooth(selectedBooth.id, {
+        packageId,
+        durationDays: durationDays || undefined,
+      });
+      setQuoteData(quote);
+    } catch (error) {
+      setQuoteData(null);
+      setQuoteError(getErrorMessage(error));
+    } finally {
+      setQuoteLoading(false);
+    }
+  }, [selectedBooth?.id]);
+
   useEffect(() => {
     if (!showPurchase || !selectedPackage || isDefaultBoothPlan(selectedPackage.code)) return;
     void Promise.resolve().then(() => loadSelectedPolicy(selectedPackage.id));
-  }, [loadSelectedPolicy, selectedPackage, showPurchase]);
+    void Promise.resolve().then(() => loadQuote(selectedPackage.id, selectedDuration));
+  }, [loadSelectedPolicy, loadQuote, selectedDuration, selectedPackage, showPurchase]);
 
   const loadCatalog = useCallback(async () => {
     setCatalogLoading(true);
@@ -244,24 +289,24 @@ export function Fees() {
       setSubmitting(true);
       let data: PayOSPaymentResponse;
       if (isRenew) {
-          data = await ownerSubscriptionService.renewBooth(selectedBooth.id, {
-            durationDays: selectedDuration || undefined,
-            acceptedPolicy: true,
-            acceptedPolicyVersion: selectedPolicy.version,
-          });
+        data = await ownerSubscriptionService.renewBooth(selectedBooth.id, {
+          durationDays: selectedDuration || undefined,
+          acceptedPolicy: true,
+          acceptedPolicyVersion: selectedPolicy.version,
+        });
       } else {
-          data = await ownerSubscriptionService.purchaseBooth(selectedBooth.id, {
-            packageId: selectedPackage.id,
-            durationDays: selectedDuration || undefined,
-            acceptedPolicy: true,
-            acceptedPolicyVersion: selectedPolicy.version,
-          });
+        data = await ownerSubscriptionService.purchaseBooth(selectedBooth.id, {
+          packageId: selectedPackage.id,
+          durationDays: selectedDuration || undefined,
+          acceptedPolicy: true,
+          acceptedPolicyVersion: selectedPolicy.version,
+        });
       }
 
       if (data.status === 'Active' || data.status === 'Scheduled') {
         showToast('success', data.status === 'Scheduled'
           ? 'Your plan change has been scheduled. Your current plan remains active until its end date.'
-          : 'Subscription activated successfully.');
+          : 'Your plan has been activated. No PayOS payment was required because your subscription credit covered the selected plan.');
         closeSubscriptionModal();
         await fetchData();
       } else if (data.status === 'AwaitingConfirmation') {
@@ -269,11 +314,20 @@ export function Fees() {
         closeSubscriptionModal();
         await fetchData();
       } else {
-        closeSubscriptionModal();
         if (!data.checkoutUrl) {
           showToast('error', 'The payment page is unavailable. Please try again later.');
           return;
         }
+        if (quoteData && data.amount !== quoteData.amountDue) {
+          setPriceRefreshConfirmation({
+            quoteAmount: quoteData.amountDue,
+            actualAmount: data.amount,
+            checkoutUrl: data.checkoutUrl,
+          });
+          closeSubscriptionModal();
+          return;
+        }
+        closeSubscriptionModal();
         window.location.assign(data.checkoutUrl);
       }
     } catch (error) {
@@ -379,182 +433,195 @@ export function Fees() {
                 : boothLoadError ?? "Please try again or contact Support if the problem continues."}</p>
             </div>
           </div>
-          <button type="button" onClick={() => void refreshBooths()} className="shrink-0 text-sm font-semibold text-amber-900 underline">Retry</button>
+          <button
+            type="button"
+            onClick={() => void refreshBooths()}
+            className="shrink-0 rounded-lg bg-amber-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-800"
+          >
+            Refresh
+          </button>
         </div>
       )}
 
-      <div className="flex bg-slate-100 p-1 rounded-lg w-fit">
-        <button onClick={() => setActiveTab('current')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'current' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-indigo-600'}`}>Current Plan</button>
-        <button onClick={() => setActiveTab('history')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'history' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-indigo-600'}`}>History</button>
-      </div>
-
-      {catalogError && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 flex items-center justify-between">
-          <div className="flex">
-            <div className="ml-3">
-              <p className="text-sm text-red-700">{catalogError}</p>
-            </div>
-          </div>
-          <button onClick={() => void loadCatalog()} className="text-sm font-medium text-red-700 hover:text-red-600 underline">Retry</button>
+      {selectedBooth && (
+        <div className="flex gap-2 border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab('current')}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'current' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            <TrendingUp className="w-4 h-4" />
+            Plans &amp; Subscription
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'history' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            <History className="w-4 h-4" />
+            History
+          </button>
         </div>
       )}
 
-      {subscriptionError && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 flex items-center justify-between">
-          <p className="text-sm text-red-700">{subscriptionError}</p>
-          <button onClick={() => void loadSubscription()} className="text-sm font-medium text-red-700 hover:text-red-600 underline">Retry</button>
-        </div>
-      )}
-
-      {catalogLoading ? (
-        <div className="flex flex-col items-center justify-center h-64 text-slate-500">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-4"></div>
-          <p>Loading...</p>
-        </div>
-      ) : activeTab === 'current' ? (
+      {activeTab === 'current' ? (
         <div className="space-y-6">
-          {subscriptionLoading && selectedBooth && (
-            <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600" style={cardStyle}>
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
-              Loading your current subscription...
-            </div>
-          )}
-          {current && (
-            <div className="space-y-4">
-            {current.pendingSubscriptionId && (
-              <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="font-semibold">Payment waiting for {current.pendingPackageName || 'your selected plan'}</p>
-                <p className="mt-1 text-sm text-amber-800">Continue this payment before choosing another plan, or cancel it first.</p>
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <button type="button" disabled={submitting} onClick={() => void handleContinuePendingPayment()} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50">Continue payment</button>
-                  <button type="button" disabled={submitting} onClick={() => void handleCancelExistingPayment()} className="rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50">Cancel</button>
-                </div>
-              </div>
-            )}
-            {current.scheduledSubscriptionId && (
-              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-blue-950">
-                <p className="font-semibold">{current.scheduledPackageName || 'Your next plan'} is scheduled</p>
-                <p className="mt-1 text-sm text-blue-800">Your current plan remains active. The scheduled plan starts on {formatDate(current.scheduledStartDate)}.</p>
-              </div>
-            )}
+          {subscriptionLoading ? (
             <div style={cardStyle} className="p-6">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3 text-sm text-slate-600">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+                Loading your current subscription...
+              </div>
+            </div>
+          ) : subscriptionError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
+              <div className="flex items-start justify-between gap-4">
+                <p className="text-sm font-medium">{subscriptionError}</p>
+                <button
+                  type="button"
+                  onClick={() => void loadSubscription()}
+                  className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800"
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
+          ) : current ? (
+            <div style={cardStyle} className="p-6">
+              <div className="flex justify-between items-start">
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900">{getBoothPlanName(current.packageCode, current.packageName)}</h2>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-indigo-600">Current Plan</span>
+                  <h3 className="text-xl font-bold text-gray-900 mt-1">{getBoothPlanName(current.packageCode, current.packageName)}</h3>
                 </div>
-                <div className="flex items-center gap-3">
-                  {current.status === 'Active' && !isDefaultBoothPlan(current.packageCode) && (
-                    <button 
-                      onClick={() => {
-                        const pkg = packages.find(p => p.code === current.packageCode);
-                        if (pkg) {
-                          if (pricingErrors.has(pkg.id)) {
-                            showToast('error', 'Pricing is currently unavailable. Please retry before renewing.');
-                            return;
-                          }
-                          setSelectedPackage(pkg);
-                          const prices = packagePrices[pkg.id] || [];
-                          const defaultDuration = pkg.durationDays;
-                          const hasDefault = prices.some(p => p.durationDays === defaultDuration);
-                          setSelectedDuration(hasDefault ? defaultDuration : (prices[0]?.durationDays || null));
-                          setIsRenew(true);
-                          setShowPurchase(true);
-                        } else {
-                          showToast('error', 'Cannot renew: package no longer available.');
-                        }
-                      }}
-                      className="px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-md text-sm font-medium hover:bg-indigo-200"
-                    >
-                      Renew Subscription
-                    </button>
-                  )}
-                  {getStatusBadge(current.status)}
+                {getStatusBadge(current.status)}
+              </div>
+
+              {current.pendingSubscriptionId && (
+                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-semibold">
+                        You have a pending payment for {getBoothPlanName(current.pendingPackageCode, current.pendingPackageName || 'another plan')}.
+                      </p>
+                      <p className="mt-1 text-xs text-amber-800">
+                        Complete your payment to activate this plan, or cancel it to choose a different plan.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleContinuePendingPayment()}
+                        disabled={submitting}
+                        className="rounded-lg bg-amber-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-50"
+                      >
+                        {submitting ? 'Opening...' : 'Continue payment'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleCancelExistingPayment()}
+                        disabled={submitting}
+                        className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                      >
+                        Cancel pending payment
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {current.scheduledSubscriptionId && (
+                <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-900">
+                  <p className="font-semibold">
+                    Scheduled plan: {getBoothPlanName(null, current.scheduledPackageName || 'Next plan')}
+                  </p>
+                  <p className="mt-1 text-xs text-blue-800">
+                    This plan will become active automatically on {formatDate(current.scheduledStartDate)}.
+                  </p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <div className="text-xs text-gray-500 flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> Start Date</div>
+                  <div className="font-semibold text-gray-900 text-sm mt-1">{formatDate(current.startDate)}</div>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <div className="text-xs text-gray-500 flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> End Date</div>
+                  <div className="font-semibold text-gray-900 text-sm mt-1">{formatDate(current.endDate)}</div>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <div className="text-xs text-gray-500 flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> Days Remaining</div>
+                  <div className="font-semibold text-gray-900 text-sm mt-1">{current.daysRemaining} days</div>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <div className="text-xs text-gray-500 flex items-center gap-1"><CreditCard className="w-3.5 h-3.5" /> Paid Amount</div>
+                  <div className="font-semibold text-gray-900 text-sm mt-1">{formatPrice(current.paidAmount)}</div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <div className="text-xs text-gray-500 mb-1">Start Date</div>
-                  <div className="text-sm font-medium text-gray-900 flex items-center"><Calendar className="w-3.5 h-3.5 mr-1.5 text-gray-400" />{isDefaultBoothPlan(current.packageCode) ? 'Included automatically' : formatDate(current.startDate)}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 mb-1">End Date</div>
-                  <div className="text-sm font-medium text-gray-900 flex items-center"><Calendar className="w-3.5 h-3.5 mr-1.5 text-gray-400" />{isDefaultBoothPlan(current.packageCode) ? 'No expiration' : formatDate(current.endDate)}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 mb-1">Remaining</div>
-                  <div className="text-sm font-medium text-gray-900 flex items-center"><Clock className="w-3.5 h-3.5 mr-1.5 text-gray-400" />{isDefaultBoothPlan(current.packageCode) ? 'Always available' : `${current.daysRemaining} days`}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 mb-1">Amount Paid</div>
-                  <div className="text-sm font-medium text-gray-900">{formatPrice(current.paidAmount)}</div>
-                </div>
-              </div>
+
               {renderCurrentFeatures(current.packageCode)}
             </div>
-            </div>
-          )}
-
-          {selectedBooth && !subscriptionLoading && !current && !subscriptionError && (
-            <div className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600" style={cardStyle}>
-              Your current plan will appear here once it is available.
+          ) : (
+            <div style={cardStyle} className="p-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-indigo-600">Current Plan</span>
+                  <h3 className="text-xl font-bold text-gray-900 mt-1">Booth Basic</h3>
+                  <p className="mt-1 text-sm text-gray-600">Booth Basic is included automatically. Upgrade to access more features.</p>
+                </div>
+                {getStatusBadge('Active')}
+              </div>
+              {renderCurrentFeatures('BOOTH_FREE')}
             </div>
           )}
 
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Available Plans</h3>
-              <button disabled={!!catalogError || !selectedBooth} onClick={() => { setSelectedPackage(null); setIsRenew(false); setShowPurchase(true); }} className={`px-4 py-2 text-white rounded-lg text-sm font-medium flex items-center gap-2 ${(catalogError || !selectedBooth) ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
-                <TrendingUp className="w-4 h-4" /> Subscribe to New Plan
-              </button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {packages.map(pkg => (
-                <div key={pkg.id} style={cardStyle} className="p-5 flex flex-col">
-                  {pkg.imageUrl ? (
-                    <div className="mb-3 rounded-lg overflow-hidden" style={{ height: '120px', background: '#F8FAFC' }}>
-                      <ImageWithFallback src={resolveMediaUrl(pkg.imageUrl)} alt={pkg.packageName} className="w-full h-full object-cover" />
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between mb-3">
-                      <Package className="w-6 h-6 text-indigo-600" />
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Available Plans</h3>
+            {catalogError && (
+              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                <div className="flex items-center justify-between gap-3">
+                  <span>{catalogError}</span>
+                  <button type="button" onClick={() => void loadCatalog()} className="rounded-lg bg-red-800 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700">Retry</button>
+                </div>
+              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {packages.map((pkg) => (
+                <div key={pkg.id} style={cardStyle} className={`p-6 flex flex-col relative transition-all duration-200 ${current?.packageCode === pkg.code ? 'border-2 border-indigo-600 shadow-md' : 'border border-gray-200 hover:shadow-lg'}`}>
+                  {current?.packageCode === pkg.code && (
+                    <div className="absolute top-0 right-0 transform translate-x-2 -translate-y-2">
+                      <span className="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full uppercase shadow">Current</span>
                     </div>
                   )}
-                  <h4 className="font-semibold text-gray-900 mb-1">{getBoothPlanName(pkg.code, pkg.packageName)}</h4>
+
+                  {pkg.imageUrl && (
+                    <div className="w-full h-36 relative mb-4 rounded-lg overflow-hidden border border-gray-100">
+                      <ImageWithFallback
+                        src={resolveMediaUrl(pkg.imageUrl)}
+                        alt={pkg.packageName}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+
+                  <h4 className="text-lg font-bold text-gray-900 mb-1">{getBoothPlanName(pkg.code, pkg.packageName)}</h4>
+
                   {(() => {
                     if (isDefaultBoothPlan(pkg.code)) {
                       return (
-                        <div className="mb-3">
-                          <span className="text-xl font-bold text-emerald-700">Free forever</span>
-                          <p className="text-xs text-gray-500 mt-1">Applied automatically when no paid plan is active.</p>
+                        <div className="flex items-baseline gap-1 mb-3">
+                          <span className="text-xl font-bold text-emerald-600">Free</span>
+                          <span className="text-xs text-gray-500">/ included</span>
                         </div>
                       );
                     }
                     if (pricingErrors.has(pkg.id)) {
                       return (
-                        <div className="flex flex-col mb-3">
-                          <span className="text-sm text-red-500 font-medium">Pricing is currently unavailable.</span>
-                          <button onClick={() => void loadCatalog()} className="text-xs text-indigo-600 hover:text-indigo-800 self-start mt-1 underline">Retry</button>
+                        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+                          Pricing is currently unavailable.
                         </div>
                       );
                     }
                     const prices = packagePrices[pkg.id] || [];
-                    const displayOption = prices.find(p => p.durationDays === pkg.durationDays);
-                    if (displayOption?.hasPromotion) {
-                      return (
-                        <div className="flex flex-col mb-3">
-                          <div className="flex items-baseline gap-2">
-                            <span className="text-xl font-bold text-red-600">{formatPrice(displayOption.effectivePrice)}</span>
-                            <span className="text-sm text-gray-400 line-through">{formatPrice(displayOption.basePrice)}</span>
-                            <span className="text-xs text-gray-500">/ {displayOption.durationDays} days</span>
-                          </div>
-                          <span className="text-xs text-red-500 font-medium">
-                            Promo valid until {displayOption.promotionEndDate ? formatDate(displayOption.promotionEndDate) : 'further notice'}
-                          </span>
-                        </div>
-                      );
-                    }
+                    const displayOption = prices.find((p) => p.durationDays === pkg.durationDays) || prices[0];
                     if (displayOption) {
                       return (
                         <div className="flex items-baseline gap-1 mb-3">
@@ -585,19 +652,23 @@ export function Fees() {
                     </div>
                   )}
 
-                  <button disabled={!!catalogError || !selectedBooth || pricingErrors.has(pkg.id) || isDefaultBoothPlan(pkg.code) || (current?.packageCode === pkg.code && current?.pendingPackageCode !== pkg.code)} onClick={() => {
-                    if (current?.pendingSubscriptionId && current.pendingPackageCode === pkg.code) {
-                      void handleContinuePendingPayment();
-                      return;
-                    }
-                    setSelectedPackage(pkg);
-                    const prices = packagePrices[pkg.id] || [];
-                    const defaultDuration = pkg.durationDays;
-                    const hasDefault = prices.some(p => p.durationDays === defaultDuration);
-                    setSelectedDuration(hasDefault ? defaultDuration : (prices[0]?.durationDays || null));
-                    setIsRenew(false);
-                    setShowPurchase(true); 
-                  }} className={`mt-3 w-full px-4 py-2 text-white rounded-lg text-sm font-medium ${(catalogError || !selectedBooth || pricingErrors.has(pkg.id) || isDefaultBoothPlan(pkg.code) || (current?.packageCode === pkg.code && current?.pendingPackageCode !== pkg.code)) ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                  <button
+                    disabled={!!catalogError || !selectedBooth || pricingErrors.has(pkg.id) || isDefaultBoothPlan(pkg.code) || (current?.packageCode === pkg.code && current?.pendingPackageCode !== pkg.code)}
+                    onClick={() => {
+                      if (current?.pendingSubscriptionId && current.pendingPackageCode === pkg.code) {
+                        void handleContinuePendingPayment();
+                        return;
+                      }
+                      setSelectedPackage(pkg);
+                      const prices = packagePrices[pkg.id] || [];
+                      const defaultDuration = pkg.durationDays;
+                      const hasDefault = prices.some(p => p.durationDays === defaultDuration);
+                      setSelectedDuration(hasDefault ? defaultDuration : (prices[0]?.durationDays || null));
+                      setIsRenew(false);
+                      setShowPurchase(true);
+                    }}
+                    className={`mt-3 w-full px-4 py-2 text-white rounded-lg text-sm font-medium ${(catalogError || !selectedBooth || pricingErrors.has(pkg.id) || isDefaultBoothPlan(pkg.code) || (current?.packageCode === pkg.code && current?.pendingPackageCode !== pkg.code)) ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                  >
                     {!selectedBooth
                       ? 'Booth assignment required'
                       : isDefaultBoothPlan(pkg.code)
@@ -630,7 +701,8 @@ export function Fees() {
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b">Start</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b">End</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b">Price</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b">Paid Amount</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -641,6 +713,15 @@ export function Fees() {
                     <td className="px-6 py-4 text-sm text-gray-700">{formatDate(item.startDate)}</td>
                     <td className="px-6 py-4 text-sm text-gray-700">{formatDate(item.endDate)}</td>
                     <td className="px-6 py-4 text-sm text-gray-900 font-medium">{formatPrice(item.paidAmount)}</td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedHistoryDetail(item)}
+                        className="px-2.5 py-1 rounded-lg text-xs font-medium border border-gray-200 text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        View details
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -649,21 +730,9 @@ export function Fees() {
         </div>
       )}
 
+      {/* Subscription / Upgrade Modal */}
       <Modal isOpen={showPurchase} onClose={closeSubscriptionModal} title={isRenew ? "Renew Subscription" : "Subscribe to Plan"} size="md">
         <div className="space-y-4">
-          {selectedPackage && (() => {
-            const prices = packagePrices[selectedPackage.id] || [];
-            const selectedPrice = prices.find(p => p.durationDays === selectedDuration);
-            const displayPrice = selectedPrice ? selectedPrice.effectivePrice : selectedPackage.price;
-            const displayDuration = selectedPrice ? selectedPrice.durationDays : selectedPackage.durationDays;
-            return (
-              <div className="p-4 rounded-lg bg-indigo-50 border border-indigo-200">
-                <p className="text-sm text-gray-800">
-                  You are selecting <strong>{getBoothPlanName(selectedPackage.code, selectedPackage.packageName)}</strong> ({formatPrice(displayPrice)} / {displayDuration} days).
-                </p>
-              </div>
-            );
-          })()}
           {!selectedPackage && packages.length > 0 && (
             <div>
               <label style={labelStyle}>Select Plan</label>
@@ -702,6 +771,7 @@ export function Fees() {
               </select>
             </div>
           )}
+
           {selectedPackage && (packagePrices[selectedPackage.id] || []).length > 0 && (
             <div>
               <label style={labelStyle}>Select Price Tier</label>
@@ -718,6 +788,59 @@ export function Fees() {
               </select>
             </div>
           )}
+
+          {/* Payment summary breakdown */}
+          {quoteLoading ? (
+            <div className="rounded-xl p-4 flex items-center justify-center gap-2 bg-slate-50 border border-slate-200">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+              <span className="text-sm text-slate-500">Calculating payment summary...</span>
+            </div>
+          ) : quoteError ? (
+            <div className="rounded-xl p-4 bg-red-50 border border-red-200">
+              <p className="text-sm text-red-600 mb-2">{quoteError}</p>
+              <button
+                type="button"
+                onClick={() => selectedPackage && void loadQuote(selectedPackage.id, selectedDuration)}
+                className="text-xs font-semibold underline text-red-700"
+              >
+                Retry calculation
+              </button>
+            </div>
+          ) : quoteData ? (
+            <div className="rounded-xl p-4 bg-slate-50 border border-slate-200">
+              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Payment summary</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Current plan</span>
+                  <span className="font-medium text-slate-900">{quoteData.currentPackageName || 'Booth Basic'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Selected plan</span>
+                  <span className="font-medium text-slate-900">{quoteData.targetPackageName} — {selectedDuration} days</span>
+                </div>
+                <div className="border-t border-slate-200 my-2" />
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Selected plan price</span>
+                  <span className="font-medium text-slate-900">{formatPrice(quoteData.baseAmount)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Unused subscription credit</span>
+                  <span className={`font-medium ${quoteData.creditAmount > 0 ? 'text-emerald-600' : 'text-slate-900'}`}>
+                    {quoteData.creditAmount > 0 ? `-${formatPrice(quoteData.creditAmount)}` : '0 VND'}
+                  </span>
+                </div>
+                <div className="border-t border-slate-200 my-2" />
+                <div className="flex justify-between text-base font-bold">
+                  <span className="text-slate-900">Amount payable via PayOS</span>
+                  <span className="text-indigo-600">{formatPrice(quoteData.amountDue)}</span>
+                </div>
+                {quoteData.message && (
+                  <p className="text-xs text-slate-500 mt-2 italic">{quoteData.message}</p>
+                )}
+              </div>
+            </div>
+          ) : null}
+
           {selectedPackage && !isDefaultBoothPlan(selectedPackage.code) && (
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="mb-3 flex items-start gap-3">
@@ -777,16 +900,124 @@ export function Fees() {
               ) : null}
             </div>
           )}
+
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
             <button onClick={closeSubscriptionModal} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium">Cancel</button>
-            <button onClick={handlePurchase} disabled={!selectedPackage || isDefaultBoothPlan(selectedPackage.code) || pricingErrors.has(selectedPackage.id) || policyLoading || !!policyError || !selectedPolicy || !policyAccepted || submitting} className={`px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium flex items-center ${(!selectedPackage || isDefaultBoothPlan(selectedPackage.code) || pricingErrors.has(selectedPackage.id) || policyLoading || !!policyError || !selectedPolicy || !policyAccepted || submitting) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-700'}`}>
-              {submitting ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div> : <CheckCircle className="w-4 h-4 mr-2" />}
-              Complete Payment
+            <button
+              onClick={handlePurchase}
+              disabled={!selectedPackage || isDefaultBoothPlan(selectedPackage.code) || pricingErrors.has(selectedPackage.id) || policyLoading || !!policyError || !selectedPolicy || !policyAccepted || quoteLoading || !!quoteError || !quoteData || submitting}
+              className={`px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium flex items-center ${(!selectedPackage || isDefaultBoothPlan(selectedPackage.code) || pricingErrors.has(selectedPackage.id) || policyLoading || !!policyError || !selectedPolicy || !policyAccepted || quoteLoading || !!quoteError || !quoteData || submitting) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-700'}`}
+            >
+              {submitting ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+              ) : quoteLoading ? (
+                'Calculating...'
+              ) : (
+                <CheckCircle className="w-4 h-4 mr-2" />
+              )}
+              {quoteData?.pendingAction === 'ResumeExistingPayment'
+                ? 'Continue payment'
+                : quoteData?.pendingAction === 'ScheduleDowngrade'
+                ? 'Schedule downgrade'
+                : quoteData?.activationMode === 'CreditCovered'
+                ? 'Activate plan'
+                : quoteData?.activationMode === 'Free'
+                ? 'Activate free plan'
+                : 'Continue to PayOS'}
             </button>
           </div>
         </div>
       </Modal>
 
+      {/* ─── Price Refresh Confirmation Modal ─── */}
+      {priceRefreshConfirmation && (
+        <Modal isOpen={!!priceRefreshConfirmation} onClose={() => setPriceRefreshConfirmation(null)} title="Payment Total Refreshed" size="sm">
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              Your payment total has been refreshed from {formatPrice(priceRefreshConfirmation.quoteAmount)} to {formatPrice(priceRefreshConfirmation.actualAmount)}.
+            </p>
+            <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => setPriceRefreshConfirmation(null)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.assign(priceRefreshConfirmation.checkoutUrl);
+                }}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"
+              >
+                Continue to PayOS
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ─── History Details Modal ─── */}
+      {selectedHistoryDetail && (
+        <Modal isOpen={!!selectedHistoryDetail} onClose={() => setSelectedHistoryDetail(null)} title="Subscription Details" size="md">
+          <div className="space-y-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-slate-500">Selected plan</span>
+              <span className="font-medium text-slate-900">{getBoothPlanName(selectedHistoryDetail.packageCode, selectedHistoryDetail.packageName)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Change</span>
+              <span className="font-medium text-slate-900">
+                {selectedHistoryDetail.changeType
+                  ? (selectedHistoryDetail.previousPackageName
+                      ? `${selectedHistoryDetail.changeType} from ${selectedHistoryDetail.previousPackageName}`
+                      : selectedHistoryDetail.changeType)
+                  : 'New purchase'}
+              </span>
+            </div>
+            <div className="border-t border-slate-200 my-2" />
+            <div className="flex justify-between">
+              <span className="text-slate-500">Selected plan price</span>
+              <span className="font-medium text-slate-900">{formatPrice(selectedHistoryDetail.baseAmount ?? selectedHistoryDetail.paidAmount)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Credit applied</span>
+              <span className={`font-medium ${(selectedHistoryDetail.creditAmount ?? 0) > 0 ? 'text-emerald-600' : 'text-slate-900'}`}>
+                {(selectedHistoryDetail.creditAmount ?? 0) > 0 ? `-${formatPrice(selectedHistoryDetail.creditAmount!)}` : '0 VND'}
+              </span>
+            </div>
+            <div className="flex justify-between font-bold">
+              <span className="text-slate-900">Paid amount</span>
+              <span className="text-indigo-600">{formatPrice(selectedHistoryDetail.paidAmount)}</span>
+            </div>
+            <div className="border-t border-slate-200 my-2" />
+            <div className="flex justify-between">
+              <span className="text-slate-500">Status</span>
+              <span className="font-medium text-slate-900">{selectedHistoryDetail.status}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Paid date</span>
+              <span className="font-medium text-slate-900">{formatDateTime(selectedHistoryDetail.paidAt || selectedHistoryDetail.createdAt)}</span>
+            </div>
+            {selectedHistoryDetail.payOSOrderCode && (
+              <div className="flex justify-between">
+                <span className="text-slate-500">PayOS reference</span>
+                <span className="font-medium text-slate-900">{selectedHistoryDetail.payOSOrderCode}</span>
+              </div>
+            )}
+            <div className="flex justify-end pt-4 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => setSelectedHistoryDetail(null)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

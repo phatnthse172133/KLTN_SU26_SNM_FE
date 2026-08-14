@@ -123,4 +123,6 @@ export const businessErrorMessages = {
   PAYMENT_ALREADY_CONFIRMED: "This payment has already been confirmed.",
   ORDER_NOT_PAYABLE: "Payment cannot be confirmed for this order.",
   DOCUMENT_VERIFIED_LOCKED: "This document has been verified and is locked. Verified documents cannot be deleted.",
+  CURRENT_PASSWORD_INVALID: "Current password is incorrect.",
+  PASSWORD_REUSE_NOT_ALLOWED: "New password must be different from the current password.",
 };

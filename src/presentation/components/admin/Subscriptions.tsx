@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { 
   CheckCircle, Ban, DollarSign, Calendar, Clock, 
-  Store, Package as PackageIcon, Mail, User, Eye, Phone, CreditCard
+  Store, Package as PackageIcon, Mail, User, Eye, Phone, CreditCard, TrendingUp
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Pagination } from './components/Pagination';
@@ -302,7 +302,18 @@ export default function Subscriptions() {
               <DetailCard icon={User} label="Subscriber" value={selectedSubscription.ownerName || 'Not available'} secondary={selectedSubscription.ownerEmail || 'Not available'} />
               <DetailCard icon={User} label="Buyer / payer" value={selectedSubscription.buyerName || selectedSubscription.ownerName || 'Not available'} secondary={selectedSubscription.buyerEmail || selectedSubscription.ownerEmail || 'Not available'} />
               <DetailCard icon={Phone} label="Buyer phone" value={selectedSubscription.buyerPhone || 'Not available'} />
-              <DetailCard icon={DollarSign} label="Amount paid" value={selectedSubscription.paidAmount > 0 ? `${new Intl.NumberFormat('en-US').format(selectedSubscription.paidAmount)} VND` : 'Not paid'} />
+              <DetailCard
+                icon={TrendingUp}
+                label="Change type"
+                value={selectedSubscription.changeType
+                  ? (selectedSubscription.previousPackageName
+                      ? `${selectedSubscription.changeType} from ${selectedSubscription.previousPackageName}`
+                      : selectedSubscription.changeType)
+                  : 'New purchase'}
+              />
+              <DetailCard icon={DollarSign} label="Selected plan price" value={`${new Intl.NumberFormat('en-US').format(selectedSubscription.baseAmount || selectedSubscription.paidAmount)} VND`} />
+              <DetailCard icon={DollarSign} label="Credit applied" value={selectedSubscription.creditAmount > 0 ? `-${new Intl.NumberFormat('en-US').format(selectedSubscription.creditAmount)} VND` : '0 VND'} />
+              <DetailCard icon={DollarSign} label="Amount paid" value={selectedSubscription.paidAmount > 0 ? `${new Intl.NumberFormat('en-US').format(selectedSubscription.paidAmount)} VND` : '0 VND'} />
               <DetailCard icon={Calendar} label="Subscription period" value={`${formatDate(selectedSubscription.startDate)} - ${formatDate(selectedSubscription.endDate)}`} />
               <DetailCard icon={Clock} label="Payment time" value={selectedSubscription.paidAt ? formatDateTime(selectedSubscription.paidAt) : 'Not available'} />
             </div>
