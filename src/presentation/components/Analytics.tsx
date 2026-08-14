@@ -640,7 +640,7 @@ export function Analytics() {
                         <td className="px-4 py-3 font-semibold text-gray-900">{promotion.title}</td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${promotionStatusClass[promotion.status] ?? "bg-slate-100 text-slate-600"}`}>
-                            {promotion.status}
+                            {promotion.status === "Suspended" ? "Banned" : promotion.status}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-gray-500 whitespace-nowrap">

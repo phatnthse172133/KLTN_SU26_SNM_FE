@@ -23,6 +23,28 @@ export interface CurrentSubscription {
   scheduledStartDate: string | null;
 }
 
+export interface SubscriptionQuoteRequest {
+  packageId: string;
+  durationDays?: number | null;
+}
+
+export interface SubscriptionQuoteResponse {
+  currentPackageName: string;
+  targetPackageName: string;
+  changeType: string;
+  baseAmount: number;
+  creditAmount: number;
+  amountDue: number;
+  currency: string;
+  currentPlanEndDate: string | null;
+  activationMode: string;
+  pendingAction: string;
+  pendingSubscriptionId: string | null;
+  pendingPackageName: string | null;
+  pendingPaymentExpiresAt: string | null;
+  message: string;
+}
+
 export interface SubscriptionHistoryItem {
   id: string;
   packageName: string;
@@ -30,7 +52,11 @@ export interface SubscriptionHistoryItem {
   status: string;
   startDate: string;
   endDate: string;
+  baseAmount: number;
+  creditAmount: number;
   paidAmount: number;
+  changeType?: string | null;
+  previousPackageName?: string | null;
   payOSOrderCode: number | null;
   paidAt: string | null;
   createdAt: string;
@@ -66,7 +92,10 @@ export interface PayOSPaymentResponse {
   orderCode: number;
   packageName: string;
   durationDays: number;
+  baseAmount?: number;
+  creditAmount?: number;
   amount: number;
+  changeType?: string;
   qrCode: string;
   checkoutUrl: string;
   accountNumber: string;
@@ -78,11 +107,20 @@ export interface PayOSPaymentResponse {
 
 export interface PaymentStatusResponse {
   subscriptionId: string;
+  packageName?: string;
   status: string;
+  baseAmount?: number;
+  creditAmount?: number;
   paidAmount: number;
+  changeType?: string | null;
   paidAt: string | null;
   startDate: string | null;
   endDate: string | null;
+  providerStatus?: string | null;
+  isFinal?: boolean;
+  canResumePayment?: boolean;
+  checkoutUrl?: string | null;
+  message?: string;
 }
 
 export interface OwnerPackage {
@@ -110,6 +148,11 @@ export const ownerSubscriptionService = {
     return resp.data || [];
   },
 
+  quoteMarket: async (request: SubscriptionQuoteRequest): Promise<SubscriptionQuoteResponse> => {
+    const resp = await apiClient.post<BaseResponse<SubscriptionQuoteResponse>>('/market-owner/subscriptions/quote', request);
+    return resp.data;
+  },
+
   purchaseMarket: async (data: PurchaseRequest): Promise<PayOSPaymentResponse> => {
     const resp = await apiClient.post<BaseResponse<PayOSPaymentResponse>>('/market-owner/subscriptions/purchase', data);
     return resp.data;
@@ -123,6 +166,11 @@ export const ownerSubscriptionService = {
   getBoothHistory: async (boothId: string): Promise<SubscriptionHistoryItem[]> => {
     const resp = await apiClient.get<BaseResponse<SubscriptionHistoryItem[]>>(`/booths/${boothId}/subscriptions/history`);
     return resp.data || [];
+  },
+
+  quoteBooth: async (boothId: string, request: SubscriptionQuoteRequest): Promise<SubscriptionQuoteResponse> => {
+    const resp = await apiClient.post<BaseResponse<SubscriptionQuoteResponse>>(`/booths/${boothId}/subscriptions/quote`, request);
+    return resp.data;
   },
 
   purchaseBooth: async (boothId: string, request: PurchaseRequest): Promise<PayOSPaymentResponse> => {

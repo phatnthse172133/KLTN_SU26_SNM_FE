@@ -75,7 +75,7 @@ export function MarketModerationGrid(props: MarketModerationGridProps) {
           <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-700">
             <option value="">All Moderation</option>
             <option value="Active">Active</option>
-            <option value="Suspended">Suspended</option>
+            <option value="Suspended">Banned</option>
           </select>
           <button
             type="button"
@@ -128,7 +128,7 @@ export function MarketModerationGrid(props: MarketModerationGridProps) {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 items-stretch gap-6">
                 {items.map((m) => {
                   const isSuspended = m.moderationStatus === 'Suspended';
-                  const displayStatus = isSuspended ? 'Suspended' : m.lifecycleStatus;
+                  const displayStatus = isSuspended ? 'Banned' : m.lifecycleStatus;
                   return (
                     <div
                       key={m.id}
@@ -218,7 +218,7 @@ export function MarketModerationGrid(props: MarketModerationGridProps) {
                             {isSuspended ? (
                               <><Unlock className="w-4 h-4" /> Restore</>
                             ) : (
-                              <><Lock className="w-4 h-4" /> Suspend</>
+                            <><Lock className="w-4 h-4" /> Ban</>
                             )}
                           </button>
                         </div>

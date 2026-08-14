@@ -26,7 +26,11 @@ export interface AdminSubscriptionDto {
     endDate: string;
     status: SubscriptionStatus;
     adminNotes: string | null;
+    baseAmount: number;
+    creditAmount: number;
     paidAmount: number;
+    changeType: string | null;
+    previousPackageName: string | null;
     payOSOrderCode: number | null;
     paidAt: string | null;
     createdAt: string;

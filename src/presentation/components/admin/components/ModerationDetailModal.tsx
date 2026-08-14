@@ -395,7 +395,7 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
   const status = isMarket
 
 
-    ? (moderationStatus === 'Suspended' ? 'Suspended' : mDetail?.lifecycleStatus)
+    ? (moderationStatus === 'Suspended' ? 'Banned' : mDetail?.lifecycleStatus)
 
 
     : bDetail?.status;
@@ -802,10 +802,10 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
                       <div>
 
 
-                        <h4 className="text-red-800 font-semibold text-sm">{targetType} Suspended</h4>
+                        <h4 className="text-red-800 font-semibold text-sm">{targetType} Banned</h4>
 
 
-                        <p className="text-red-700 text-sm mt-1">This {targetType.toLowerCase()} is currently suspended and restricted from normal operations.</p>
+                        <p className="text-red-700 text-sm mt-1">This {targetType.toLowerCase()} is currently banned and restricted from normal operations.</p>
 
 
                       </div>
@@ -1337,7 +1337,7 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
                               <span className="font-semibold text-sm text-slate-900">
 
 
-                                Changed status to <span className={h.newStatus === 'Suspended' || h.newStatus === 'Banned' ? 'text-red-600' : 'text-emerald-600'}>{h.newStatus}</span>
+        Changed status to <span className={h.newStatus === 'Suspended' || h.newStatus === 'Banned' ? 'text-red-600' : 'text-emerald-600'}>{h.newStatus === 'Suspended' ? 'Banned' : h.newStatus}</span>
 
 
                               </span>
@@ -1412,7 +1412,7 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
             {isMarket && moderationStatus && (
 
 
-              <span className="ml-3 text-slate-500">Platform Moderation: <span className={`font-bold ${moderationStatus === 'Suspended' ? 'text-red-600' : 'text-emerald-600'}`}>{moderationStatus}</span></span>
+              <span className="ml-3 text-slate-500">Platform Moderation: <span className={`font-bold ${moderationStatus === 'Suspended' ? 'text-red-600' : 'text-emerald-600'}`}>{moderationStatus === 'Suspended' ? 'Banned' : moderationStatus}</span></span>
 
 
             )}
@@ -1466,7 +1466,7 @@ export function ModerationDetailModal({ isOpen, onClose, targetId, targetType, o
               >
 
 
-                {isMarket ? (isSuspended ? `Restore ${targetType}` : `Suspend ${targetType}`) : (isBanned ? 'Restore Booth' : 'Ban Booth')}
+                {isMarket ? (isSuspended ? `Restore ${targetType}` : `Ban ${targetType}`) : (isBanned ? 'Restore Booth' : 'Ban Booth')}
 
 
               </button>

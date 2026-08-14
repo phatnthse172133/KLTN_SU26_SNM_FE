@@ -59,6 +59,8 @@ export interface Booth {
   isFeatured: boolean;
   status: BoothStatus;
   banReason?: string | null;
+  marketOpeningHours?: string | null;
+  marketClosingHours?: string | null;
 }
 
 export interface NightMarket {
