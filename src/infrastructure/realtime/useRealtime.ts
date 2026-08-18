@@ -95,6 +95,30 @@ async function ensureChatConnection() {
       if (isDuplicate(evt.eventId)) return;
       chatHandlers.forEach((h) => h(evt));
     });
+
+    // ChatHub publishes the persisted message events directly (rather than
+    // through the generic RealtimeEvent envelope). Normalize those events so
+    // every chat screen receives them through the same hook contract.
+    const directChatEvent = (eventType: string) => (payload: unknown) => {
+      const value = payload as { id?: string; messageId?: string; conversationId?: string } | null;
+      const eventId = value?.id ?? value?.messageId ?? `${eventType}:${value?.conversationId ?? "unknown"}`;
+      if (isDuplicate(eventId)) return;
+      const evt: RealtimeEventPayload = {
+        eventId,
+        eventType,
+        occurredAt: new Date().toISOString(),
+        recipientId: null,
+        groupName: null,
+        role: null,
+        payload,
+      };
+      chatHandlers.forEach((h) => h(evt));
+    };
+    connection.on("MessageCreated", directChatEvent("MessageCreated"));
+    connection.on("MessageDeleted", directChatEvent("MessageDeleted"));
+    connection.on("ConversationRead", directChatEvent("ConversationRead"));
+    connection.on("UserTyping", directChatEvent("UserTyping"));
+    connection.on("UserStoppedTyping", directChatEvent("UserStoppedTyping"));
     chatConn = connection;
   }
 
