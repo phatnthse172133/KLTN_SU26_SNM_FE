@@ -113,23 +113,6 @@ export function Messages() {
     return () => window.clearTimeout(timer);
   }, [search]);
 
-  // ─── Realtime chat integration ───
-  // Open Chat Hub connection and join the selected conversation group
-  useRealtimeChat({
-    enabled: !!selectedId,
-    onEvent: (evt: RealtimeEventPayload) => {
-      if (evt.eventType === "MessageCreated" && selectedId) {
-        void loadMessages(selectedId, undefined, true);
-      }
-    },
-  });
-  useJoinConversation(selectedId);
-
-  // On reconnect, refresh messages
-  useOnReconnect(() => {
-    if (selectedId) void loadMessages(selectedId, undefined, true);
-  });
-
   const loadConversations = useCallback(async (signal?: AbortSignal, background = false) => {
     if (!background) setListLoading(true);
     try {
@@ -188,6 +171,25 @@ export function Messages() {
       if (!background && !signal?.aborted) setMessagesLoading(false);
     }
   }, []);
+
+  // ─── Realtime chat integration ───
+  // Open Chat Hub connection and join the selected conversation group only
+  // after the message loader exists, so realtime events always use the
+  // current callback and do not trigger a use-before-declaration error.
+  useRealtimeChat({
+    enabled: !!selectedId,
+    onEvent: (evt: RealtimeEventPayload) => {
+      if (evt.eventType === "MessageCreated" && selectedId) {
+        void loadMessages(selectedId, undefined, true);
+      }
+    },
+  });
+  useJoinConversation(selectedId);
+
+  // On reconnect, refresh messages
+  useOnReconnect(() => {
+    if (selectedId) void loadMessages(selectedId, undefined, true);
+  });
 
   const loadOlderMessages = async () => {
     if (!selectedId || olderMessagesLoading || messages.length >= messageTotal) return;
