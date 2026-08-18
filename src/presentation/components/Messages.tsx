@@ -28,6 +28,28 @@ import {
 
 const MAX_MESSAGE_LENGTH = 2000;
 
+/**
+ * Generate an idempotency key for a chat message. `crypto.randomUUID()` is
+ * unavailable in insecure browser contexts (for example the HTTP VPS URL),
+ * so sending a message must not depend on it being present.
+ */
+function createClientMessageId() {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+
+  if (typeof globalThis.crypto?.getRandomValues === "function") {
+    const bytes = new Uint8Array(16);
+    globalThis.crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, "0"));
+    return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
+  }
+
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
 function initials(name: string) {
   return name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "U";
 }
@@ -264,7 +286,7 @@ export function Messages() {
     setSending(true);
     setMessageError("");
     try {
-      const response = await chatService.sendMessage(selectedId, content, crypto.randomUUID());
+      const response = await chatService.sendMessage(selectedId, content, createClientMessageId());
       if (!response.success || !response.data) throw new Error("The message was not accepted.");
       setDraft("");
       const result = applyMessageCreated({
