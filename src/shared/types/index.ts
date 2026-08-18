@@ -7,6 +7,7 @@ export interface BaseResponse<T> {
   success: boolean;
   data: T;
   message: string;
+  errorCode?: string | null;
 }
 
 export interface PaginationResponse<T> {

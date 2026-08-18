@@ -44,6 +44,10 @@ export function isAppError(error) {
  * @property {boolean} [success]
  * @property {string} [message]
  * @property {string} [Message]
+ * @property {string} [errorCode]
+ * @property {string} [ErrorCode]
+ * @property {string} [code]
+ * @property {string} [Code]
  * @property {{ errorCode?: string; ErrorCode?: string; traceId?: string; details?: string; fieldErrors?: Record<string, string[]>; FieldErrors?: Record<string, string[]> }} [data]
  * @property {Record<string, string[]>} [errors]
  * @property {string} [title]
@@ -56,6 +60,11 @@ export function isAppError(error) {
  */
 function extractErrorCode(body) {
   if (!body) return undefined;
+  // The API envelope exposes ErrorCode at the top level. Older endpoints
+  // may still nest it inside data, so support both contracts.
+  if (body.errorCode || body.ErrorCode || body.code || body.Code) {
+    return body.errorCode ?? body.ErrorCode ?? body.code ?? body.Code;
+  }
   const data = body.data;
   if (data && (data.errorCode || data.ErrorCode)) {
     return data.errorCode ?? data.ErrorCode;
