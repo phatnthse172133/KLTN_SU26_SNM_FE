@@ -27,6 +27,7 @@ const MAX_RECENT = 20;
 const NOTIFICATION_EVENT_TYPES = new Set([
   "NotificationCreated",
   "NotificationRead",
+  "NotificationUnreadCountUpdated",
 ]);
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
@@ -138,7 +139,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       const eventType: string = detail.eventType;
       const payload = detail.payload ?? {};
 
-      if (eventType === "NotificationCreated") {
+      if (eventType === "NotificationUnreadCountUpdated") {
+        const count: number | undefined = payload.unreadCount;
+        if (typeof count === "number") setUnreadCount(count);
+      } else if (eventType === "NotificationCreated") {
         const notification: AppNotification | undefined = payload.notification;
         const count: number | undefined = payload.unreadCount;
         if (typeof count === "number") {

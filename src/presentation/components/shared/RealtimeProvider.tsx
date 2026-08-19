@@ -15,6 +15,7 @@ interface RealtimeProviderProps {
 const NOTIFICATION_EVENTS = new Set([
   "NotificationCreated",
   "NotificationRead",
+  "NotificationUnreadCountUpdated",
   "OrderCreated",
   "OrderStatusChanged",
   "OrderPaymentSucceeded",

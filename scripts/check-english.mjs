@@ -42,5 +42,5 @@ if (errors.length > 0) {
   errors.forEach(e => console.error(`  ${e}`));
   process.exit(1);
 } else {
-  console.log('check:english passed â€” no Vietnamese, vi-VN, alert(), or confirm() found.');
+  console.log('check:english passed - no Vietnamese, vi-VN, alert(), or confirm() found.');
 }
