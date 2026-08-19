@@ -46,8 +46,8 @@ walk(SRC_DIR);
 if (issues.length > 0) {
   console.warn(`\n${issues.length} warning(s) found:\n`);
   issues.forEach(e => console.warn(`  ${e}`));
-  console.error('check:quality failed â€” unused imports found.');
+  console.error('check:quality failed - unused imports found.');
   process.exit(1);
 } else {
-  console.log('check:quality passed â€” no unused imports found.');
+  console.log('check:quality passed - no unused imports found.');
 }

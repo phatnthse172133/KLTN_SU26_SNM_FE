@@ -49,7 +49,7 @@ async function asyncTest(name, fn) {
   }
 }
 
-// â”€â”€â”€ Helper: read production errorMessages.mjs â”€â”€â”€
+// ─── Helper: read production errorMessages.mjs ───
 function readProductionErrorMessages() {
   const content = readFileSync(join(SRC_DIR, 'shared', 'errors', 'errorMessages.mjs'), 'utf8');
   const match = content.match(/INVALID_CREDENTIALS:\s*"([^"]+)"/);
@@ -57,12 +57,12 @@ function readProductionErrorMessages() {
   return match[1];
 }
 
-// â”€â”€â”€ Helper: read production ConfirmDialog.tsx â”€â”€â”€
+// ─── Helper: read production ConfirmDialog.tsx ───
 function readConfirmDialog() {
   return readFileSync(join(SRC_DIR, 'presentation', 'components', 'shared', 'ConfirmDialog.tsx'), 'utf8');
 }
 
-// â”€â”€â”€ Helper: create a request instance with mock fetch â”€â”€â”€
+// ─── Helper: create a request instance with mock fetch ───
 function createTestRequest(fetchFn, opts = {}) {
   return createRequest({
     fetchFn,
@@ -80,7 +80,7 @@ function createTestRequest(fetchFn, opts = {}) {
   });
 }
 
-// â”€â”€â”€ Helper: mock fetch that responds after delay â”€â”€â”€
+// ─── Helper: mock fetch that responds after delay ───
 function delayedFetch(response, delay = 200) {
   return (url, init) => new Promise((resolve, reject) => {
     if (init?.signal?.aborted) {
@@ -96,14 +96,14 @@ function delayedFetch(response, delay = 200) {
   });
 }
 
-// â”€â”€â”€ Helper: mock fetch that throws TypeError (network error) â”€â”€â”€
+// ─── Helper: mock fetch that throws TypeError (network error) ───
 function networkErrorFetch() {
   return () => Promise.reject(new TypeError('Failed to fetch'));
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════
 // 1. Request pipeline: timeout classification
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════
 
 console.log('\n=== 1. Request pipeline: timeout classification ===');
 
@@ -149,9 +149,9 @@ await asyncTest('createRequest: pre-aborted signal produces generic error immedi
   }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════
 // 2. Request pipeline: FormData / Content-Type headers
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════
 
 console.log('\n=== 2. Request pipeline: FormData / Content-Type headers ===');
 
@@ -211,11 +211,11 @@ await asyncTest('createRequest: token sets Authorization header', async () => {
   assert.equal(capturedHeaders.get('Authorization'), 'Bearer my-token', 'Should set Bearer token');
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// 3. Request pipeline: handleResponse â€” malformed JSON
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════
+// 3. Request pipeline: handleResponse - malformed JSON
+// ═══════════════════════════════════════════════════════
 
-console.log('\n=== 3. Request pipeline: handleResponse â€” malformed JSON ===');
+console.log('\n=== 3. Request pipeline: handleResponse - malformed JSON ===');
 
 await asyncTest('createRequest: malformed JSON on success throws generic error', async () => {
   const fetchFn = () => Promise.resolve(new Response('{ invalid json }', { status: 200, headers: { 'content-type': 'application/json' } }));
@@ -254,9 +254,9 @@ await asyncTest('createRequest: non-JSON response returns raw text', async () =>
   assert.equal(result, 'plain text', 'Non-JSON response should return raw text');
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════
 // 4. Request pipeline: network error and API error mapping
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════
 
 console.log('\n=== 4. Request pipeline: network error and API error mapping ===');
 
@@ -313,9 +313,9 @@ await asyncTest('createRequest: 500 maps to generic 500 message', async () => {
   }
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════
 // 5. Production helpers: safeJsonParse, serializeBody, buildAuthHeaders
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════
 
 console.log('\n=== 5. Production helpers: safeJsonParse, serializeBody, buildAuthHeaders ===');
 
@@ -356,11 +356,11 @@ test('safeJsonParse handles objects correctly', () => {
   assert.equal(result.value.message, 'hello');
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// 6. INVALID_CREDENTIALS â†’ English message (production file)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════
+// 6. INVALID_CREDENTIALS → English message (production file)
+// ═══════════════════════════════════════════════════════
 
-console.log('\n=== 6. INVALID_CREDENTIALS â†’ English message (production file) ===');
+console.log('\n=== 6. INVALID_CREDENTIALS → English message (production file) ===');
 
 test('errorMessages.mjs maps INVALID_CREDENTIALS to English message', () => {
   const msg = readProductionErrorMessages();
@@ -369,10 +369,10 @@ test('errorMessages.mjs maps INVALID_CREDENTIALS to English message', () => {
   assert.match(msg, /incorrect email or password/i, 'Message should mention incorrect credentials');
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════
 // 7. Static acceptance: ConfirmDialog focus + Escape effects
 //    (Manual acceptance: Toast auto-dismiss, focus restoration in browser)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════
 
 console.log('\n=== 7. Static acceptance: ConfirmDialog (manual: Toast, focus in browser) ===');
 
@@ -407,7 +407,7 @@ test('ConfirmDialog Escape effect depends on open, loading, and onCancel', () =>
   assert.ok(afterEscape.includes('[open, loading, onCancel]'), 'Escape effect should depend on [open, loading, onCancel]');
 });
 
-// â”€â”€â”€ Summary â”€â”€â”€
+// ─── Summary ───
 
 console.log(`\n${'='.repeat(50)}`);
 console.log(`Contract acceptance: ${passed}/${passed + failed} tests passed.`);

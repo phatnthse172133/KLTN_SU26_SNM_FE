@@ -93,6 +93,40 @@ async function ensureNotificationConnection() {
       if (isDuplicate(evt.eventId)) return;
       notificationHandlers.forEach((h) => h(evt));
     });
+
+    // Keep compatibility with the legacy notification publisher. Some backend
+    // flows still emit these strongly-typed hub methods in addition to the
+    // generic RealtimeEvent envelope. Without listeners SignalR logs a warning
+    // and the notification is not reflected until the next refresh.
+    connection.on("ReceiveNotification", (notification: unknown) => {
+      const value = notification as { id?: string; notificationId?: string } | null;
+      const eventId = value?.id ?? value?.notificationId ?? `ReceiveNotification:${Date.now()}:${Math.random()}`;
+      if (isDuplicate(eventId)) return;
+      const evt: RealtimeEventPayload = {
+        eventId,
+        eventType: "NotificationCreated",
+        occurredAt: new Date().toISOString(),
+        recipientId: null,
+        groupName: null,
+        role: null,
+        payload: { notification },
+      };
+      notificationHandlers.forEach((h) => h(evt));
+    });
+    connection.on("NotificationUnreadCountUpdated", (value: unknown) => {
+      const payload = value as { unreadCount?: number; UnreadCount?: number } | null;
+      const unreadCount = payload?.unreadCount ?? payload?.UnreadCount;
+      const evt: RealtimeEventPayload = {
+        eventId: `NotificationUnreadCountUpdated:${Date.now()}:${Math.random()}`,
+        eventType: "NotificationUnreadCountUpdated",
+        occurredAt: new Date().toISOString(),
+        recipientId: null,
+        groupName: null,
+        role: null,
+        payload: { unreadCount },
+      };
+      notificationHandlers.forEach((h) => h(evt));
+    });
     notificationConn = connection;
   }
 

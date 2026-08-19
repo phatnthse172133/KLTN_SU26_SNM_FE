@@ -101,5 +101,5 @@ if (issues.length > 0) {
   issues.forEach(e => console.error(`  ${e}`));
   process.exit(1);
 } else {
-  console.log('check:errors passed â€” no raw error messages or technical keywords found.');
+  console.log('check:errors passed - no raw error messages or technical keywords found.');
 }

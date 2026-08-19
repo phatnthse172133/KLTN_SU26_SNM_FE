@@ -6,6 +6,9 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
+    // Match the file scope of eslint-config-next's "next" config object,
+    // which is what registers the react-hooks plugin these rules need.
+    files: ["**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
     rules: {
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-unused-vars": "error",
@@ -25,6 +28,8 @@ const eslintConfig = defineConfig([
     "dist/**",
     "src/presentation/components/ui/**",
     "**/*.js",
+    // Node maintenance scripts (CommonJS by design).
+    "scripts/**/*.cjs",
   ]),
 ]);
 
