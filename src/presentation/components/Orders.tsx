@@ -131,17 +131,44 @@ export function Orders() {
     await loadOrders();
   };
 
+  const orderStatusName = (status: number): string | null => {
+    switch (status) {
+      case ORDER_STATUS.Preparing:
+        return "PREPARING";
+      case ORDER_STATUS.ReadyForPickup:
+        return "READY_FOR_PICKUP";
+      case ORDER_STATUS.Completed:
+        return "COMPLETED";
+      default:
+        return null;
+    }
+  };
+
   const updateStatus = async (newStatus: number) => {
     if (!detail) return;
-    let reason: string | undefined;
     if (newStatus === ORDER_STATUS.Cancelled) {
-      reason = window.prompt("Enter a cancellation reason:")?.trim();
+      const reason = window.prompt("Enter a cancellation reason:")?.trim();
       if (!reason) return;
+      setActionLoading(true);
+      setError("");
+      try {
+        await orderService.cancelOrder(detail.orderCode, reason);
+        setNotice("Order cancelled successfully.");
+        await refreshDetailAndList(detail.orderCode);
+      } catch (actionError) {
+        setError(getErrorMessage(actionError));
+      } finally {
+        setActionLoading(false);
+      }
+      return;
     }
+
+    const statusName = orderStatusName(newStatus);
+    if (!statusName) return;
     setActionLoading(true);
     setError("");
     try {
-      await orderService.updateStatus(detail.orderCode, newStatus, reason);
+      await orderService.updateStatus(detail.orderCode, statusName);
       setNotice("Order status updated successfully.");
       await refreshDetailAndList(detail.orderCode);
     } catch (actionError) {
@@ -150,7 +177,6 @@ export function Orders() {
       setActionLoading(false);
     }
   };
-
   const confirmCash = async () => {
     if (!detail) return;
     setActionLoading(true);

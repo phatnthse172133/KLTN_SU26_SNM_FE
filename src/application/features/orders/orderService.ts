@@ -86,10 +86,13 @@ export const orderService = {
     ),
   createWalkIn: (payload: CreateWalkInOrderPayload) =>
     apiClient.post<BaseResponse<CreatedOrder>>("/Order/booth-owner", payload),
-  updateStatus: (orderCode: number, newStatus: number, reason?: string) =>
+  updateStatus: (orderCode: number, status: string) =>
     apiClient.patch<BaseResponse<boolean>>(`/Order/booth-owner/${orderCode}/status`, {
-      newStatus,
-      reason,
+      status,
+    }),
+  cancelOrder: (orderCode: number, refundReason: string) =>
+    apiClient.put<BaseResponse<boolean>>(`/Order/${orderCode}/BoothOwner/Cancel`, {
+      refundReason,
     }),
   confirmCashPayment: (orderCode: number) =>
     apiClient.post<BaseResponse<boolean>>(
