@@ -4,6 +4,8 @@ import React, { createContext, useContext, useState, useCallback, useRef, useEff
 
 export type ToastType = "success" | "error" | "warning" | "info";
 
+export const TOAST_DURATION = 3000;
+
 export interface Toast {
   id: string;
   type: ToastType;
@@ -67,7 +69,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         timerRef.current = null;
         animationTimerRef.current = null;
       }, 300);
-    }, 3000);
+    }, TOAST_DURATION);
   }, [clearAllTimers]);
 
   useEffect(() => {

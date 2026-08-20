@@ -246,6 +246,8 @@ export function MyBooth() {
   const [busyImageId, setBusyImageId] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoError, setLogoError] = useState("");
+  // Keep the upload response visible while the booth context refreshes. A refresh can briefly return the previous projection.
+  const [uploadedLogoUrl, setUploadedLogoUrl] = useState<string | null>(null);
   const [coverUploading, setCoverUploading] = useState(false);
   const [coverError, setCoverError] = useState("");
 
@@ -413,7 +415,11 @@ export function MyBooth() {
     setLogoUploading(true);
     setLogoError("");
     try {
-      await boothMediaService.updateLogo(file);
+      const response = await boothMediaService.updateLogo(file);
+      const nextLogoUrl = response.data?.logoUrl ?? null;
+      if (nextLogoUrl) {
+        setUploadedLogoUrl(nextLogoUrl);
+      }
       await refreshBooths();
       setNotice("Booth logo updated successfully.");
     } catch (uploadError) {
@@ -562,7 +568,11 @@ export function MyBooth() {
   const isBanned = selectedBooth.status === "Banned";
   const isActive = selectedBooth.status === "Active";
   const coverUrl = selectedBooth.thumbnailUrl ? resolveMediaUrl(selectedBooth.thumbnailUrl) : "";
-  const logoUrl = selectedBooth.logoUrl ? resolveMediaUrl(selectedBooth.logoUrl) : "";
+  const logoUrl = uploadedLogoUrl
+    ? resolveMediaUrl(uploadedLogoUrl)
+    : selectedBooth.logoUrl
+      ? resolveMediaUrl(selectedBooth.logoUrl)
+      : "";
 
   const galleryItems: GalleryImage[] = galleryImages.map((image) => ({
     id: image.id,
