@@ -368,7 +368,9 @@ export function Orders() {
                 </div>
                 <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 p-5">
                   {detail.paymentMethod === PAYMENT_TYPE.Cash && detail.paymentStatus === PAYMENT_STATUS.Pending && <button type="button" disabled={actionLoading} onClick={() => void confirmCash()} className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 px-4 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-50"><Banknote className="h-4 w-4" /> Confirm Cash Payment</button>}
-                  {detail.status === ORDER_STATUS.Placed && <button type="button" disabled={actionLoading} onClick={() => void cancelOrder()} className="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50">Cancel Order</button>}
+                  {detail.status === ORDER_STATUS.Placed && <button type="button" disabled={actionLoading} onClick={() => void cancelOrder()} className="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50" aria-label={detail.isWalkInCustomer ? "Cancel walk-in order" : "Cancel order"}>
+                    {detail.isWalkInCustomer ? "Cancel Walk-in Order" : "Cancel Order"}
+                  </button>}
                   {nextAction && <button type="button" disabled={actionLoading} onClick={() => void updateStatus(nextAction.status)} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 disabled:bg-slate-300"><CheckCircle2 className="h-4 w-4" /> {actionLoading ? "Updating..." : nextAction.label}</button>}
                 </div>
               </>
