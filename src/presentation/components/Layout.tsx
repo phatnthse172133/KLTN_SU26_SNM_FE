@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { BoothProvider, useBooth } from "@/application/context/BoothContext";
 import { accountService } from "@/application/features/account/accountService";
 import { useNotifications } from "@/application/context/NotificationContext";
+import { useChatRealtime } from "@/application/context/ChatRealtimeContext";
 import {
   AlertCircle,
   Bell,
@@ -341,6 +342,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { isAuthenticated, isReady, logout, user } = useAuth();
   const { unreadCount, recentNotifications, markAsRead } = useNotifications();
+  const { unreadCount: chatUnreadCount } = useChatRealtime();
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [showBell, setShowBell] = useState(false);
@@ -453,7 +455,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       >
                         <Icon className="w-4 h-4 flex-shrink-0" />
                         <span className="flex-1 text-left">{item.name}</span>
-                        {isActive && <span className="h-1.5 w-1.5 rounded-full bg-indigo-600 shadow-[0_0_6px_rgba(79,70,229,0.45)]" />}
+                        {item.path === "/boothowner/messages" && chatUnreadCount > 0 && (
+                          <span className="min-w-[18px] rounded-full bg-primary px-1.5 text-center text-[10px] font-bold leading-5 text-primary-foreground">
+                            {chatUnreadCount > 99 ? "99+" : chatUnreadCount}
+                          </span>
+                        )}
+                        {isActive && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
                       </Link>
                     );
                   })}

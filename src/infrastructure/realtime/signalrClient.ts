@@ -53,7 +53,7 @@ function getToken(): string | null {
 
 export function createNotificationHubConnection(): HubConnection {
   const baseUrl =
-    process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5282/api";
+    process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
   const hubUrl = buildHubUrl(baseUrl, HUB_NOTIFICATIONS);
 
   return new HubConnectionBuilder()
@@ -67,7 +67,7 @@ export function createNotificationHubConnection(): HubConnection {
 
 export function createChatHubConnection(): HubConnection {
   const baseUrl =
-    process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5282/api";
+    process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
   const hubUrl = buildHubUrl(baseUrl, HUB_CHATS);
 
   return new HubConnectionBuilder()
@@ -130,6 +130,7 @@ function groupKey(g: { method: string; id: string }): string {
 const activeNotificationGroups = new Map<string, RefCountedGroup>();
 const activeChatGroups = new Map<string, RefCountedGroup>();
 const reconnectHandlers: ReconnectHandler[] = [];
+const chatReconnectHandlers: ReconnectHandler[] = [];
 
 export function registerReconnectHandler(handler: ReconnectHandler): () => void {
   reconnectHandlers.push(handler);
@@ -142,6 +143,20 @@ export function registerReconnectHandler(handler: ReconnectHandler): () => void 
 export function fireReconnect() {
   reconnectHandlers.forEach((h) => {
     try { h(); } catch (e) { console.warn("[SignalR] Reconnect handler error:", e); }
+  });
+}
+
+export function registerChatReconnectHandler(handler: ReconnectHandler): () => void {
+  chatReconnectHandlers.push(handler);
+  return () => {
+    const idx = chatReconnectHandlers.indexOf(handler);
+    if (idx >= 0) chatReconnectHandlers.splice(idx, 1);
+  };
+}
+
+export function fireChatReconnect() {
+  chatReconnectHandlers.forEach((h) => {
+    try { h(); } catch (e) { console.warn("[SignalR] Chat reconnect handler error:", e); }
   });
 }
 

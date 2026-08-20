@@ -15,8 +15,6 @@ import {
   Star,
   Bell,
   Zap,
-  FileText,
-  Tag,
   Package,
   Headphones,
 } from 'lucide-react';
@@ -50,13 +48,6 @@ const menuGroups = [
       { id: '/admin/subscriptions', label: 'Subscriptions', icon: CreditCard },
       { id: '/admin/notifications', label: 'Notifications', icon: Bell },
       { id: '/admin/support', label: 'Support Requests', icon: Headphones },
-    ],
-  },
-  {
-    label: 'AI Management',
-    items: [
-      { id: '/admin/ai-logs', label: 'AI Logs', icon: FileText },
-      { id: '/admin/food-tags', label: 'Food Tags', icon: Tag },
     ],
   },
 ];

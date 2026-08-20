@@ -288,7 +288,7 @@ export function Dashboard() {
                 <table className="w-full text-left text-sm">
                   <thead className="bg-gray-50 text-gray-500 font-medium">
                     <tr>
-                      <th className="px-4 py-3 rounded-tl-lg">Order</th>
+                      <th className="px-4 py-3 rounded-tl-lg">STT</th>
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3">Payment</th>
                       <th className="px-4 py-3 whitespace-nowrap">Total</th>
@@ -303,9 +303,9 @@ export function Dashboard() {
                         </td>
                       </tr>
                     )}
-                    {recentOrders.map((order) => (
+                    {recentOrders.map((order, index) => (
                       <tr key={order.orderId} className="border-b border-gray-50 last:border-0">
-                        <td className="px-4 py-3 font-semibold text-gray-900">#{order.orderCode}</td>
+                        <td className="px-4 py-3 font-semibold text-gray-900">{index + 1}</td>
                         <td className="px-4 py-3"><StatusBadge status={order.status} /></td>
                         <td className="px-4 py-3">
                           <span className={`text-xs font-bold ${order.isPaid ? "text-emerald-600" : "text-gray-400"}`}>
