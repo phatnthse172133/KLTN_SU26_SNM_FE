@@ -18,6 +18,10 @@ export interface ChatMessage {
   senderRole: string;
   type: "Text" | "Image" | "System" | "File" | number;
   content: string;
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
+  attachmentMimeType?: string | null;
+  attachmentSize?: number | null;
   isRead: boolean;
   readAt?: string | null;
   createdAt: string;
@@ -70,6 +74,23 @@ export const chatService = {
     // Keep business errors readable even if a proxy returns HTTP 2xx with
     // the standard failure envelope instead of a non-2xx response.
     return requireChatSuccess(response, "The message could not be sent.");
+  },
+
+  sendAttachment: async (
+    conversationId: string,
+    file: File,
+    options?: { content?: string; clientMessageId?: string },
+  ) => {
+    const formData = new FormData();
+    formData.append("file", file, file.name);
+    if (options?.content?.trim()) formData.append("content", options.content.trim());
+    if (options?.clientMessageId) formData.append("clientMessageId", options.clientMessageId);
+
+    const response = await apiClient.post<BaseResponse<ChatMessage>>(
+      `/chats/${conversationId}/messages/attachment`,
+      formData,
+    );
+    return requireChatSuccess(response, "The attachment could not be sent.");
   },
 
   markRead: async (conversationId: string) =>

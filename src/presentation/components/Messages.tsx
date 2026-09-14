@@ -1,8 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Loader2, MessageCircle, RefreshCw, Search, Send, Wifi, WifiOff } from "lucide-react";
+import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, FileText, Loader2, MessageCircle, Paperclip, RefreshCw, Search, Send, Wifi, WifiOff, X } from "lucide-react";
 import { chatService, type ChatMessage, type ChatUser, type Conversation } from "@/application/features/chat/chatService";
 import {
   applyConversationRead,
@@ -27,6 +27,31 @@ import {
 } from "@/infrastructure/realtime";
 
 const MAX_MESSAGE_LENGTH = 2000;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+
+function messageTypeKey(message: ChatMessage): "text" | "image" | "file" | "system" {
+  const type = String(message.type ?? "").toLowerCase();
+  if (type === "1" || type === "image" || message.attachmentMimeType?.startsWith("image/")) return "image";
+  if (type === "3" || type === "file" || message.attachmentMimeType === "application/pdf") return "file";
+  if (type === "2" || type === "system") return "system";
+  return "text";
+}
+
+function formatFileSize(bytes?: number | null): string {
+  if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function conversationPreview(message?: ChatMessage | null): string {
+  if (!message) return "Conversation started";
+  const content = message.content?.trim();
+  if (content) return content;
+  return messageTypeKey(message) === "image" ? "Sent an image" : messageTypeKey(message) === "file" ? "Sent a file" : "Conversation started";
+}
 
 /**
  * Generate an idempotency key for a chat message. `crypto.randomUUID()` is
@@ -95,6 +120,7 @@ export function Messages() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [draft, setDraft] = useState("");
+  const [pendingAttachment, setPendingAttachment] = useState<File | null>(null);
   const [listLoading, setListLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [olderMessagesLoading, setOlderMessagesLoading] = useState(false);
@@ -105,6 +131,7 @@ export function Messages() {
   const [messageError, setMessageError] = useState("");
   const [markedReadFor, setMarkedReadFor] = useState<string | null>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const lastScrolledMessageRef = useRef<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   const conversationsRef = useRef<Conversation[]>([]);
@@ -282,13 +309,21 @@ export function Messages() {
   const sendMessage = async (event?: FormEvent) => {
     event?.preventDefault();
     const content = draft.trim();
-    if (!selectedId || !content || sending || content.length > MAX_MESSAGE_LENGTH) return;
+    if (!selectedId || (!content && !pendingAttachment) || sending || content.length > MAX_MESSAGE_LENGTH) return;
     setSending(true);
     setMessageError("");
     try {
-      const response = await chatService.sendMessage(selectedId, content, createClientMessageId());
+      const clientMessageId = createClientMessageId();
+      const response = pendingAttachment
+        ? await chatService.sendAttachment(selectedId, pendingAttachment, {
+            content: content || undefined,
+            clientMessageId,
+          })
+        : await chatService.sendMessage(selectedId, content, clientMessageId);
       if (!response.success || !response.data) throw new Error("The message was not accepted.");
       setDraft("");
+      setPendingAttachment(null);
+      if (attachmentInputRef.current) attachmentInputRef.current.value = "";
       const result = applyMessageCreated({
         conversations: conversationsRef.current,
         messages: messagesRef.current,
@@ -303,6 +338,25 @@ export function Messages() {
     } finally {
       setSending(false);
     }
+  };
+
+  const handleAttachmentSelect = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const mimeType = file.type.toLowerCase();
+    if (!ALLOWED_ATTACHMENT_TYPES.has(mimeType)) {
+      setMessageError("Please select a JPG, PNG, WEBP image or a PDF file.");
+      event.target.value = "";
+      return;
+    }
+    const maxBytes = mimeType.startsWith("image/") ? MAX_IMAGE_BYTES : MAX_FILE_BYTES;
+    if (file.size > maxBytes) {
+      setMessageError(mimeType.startsWith("image/") ? "Images must be 5 MB or smaller." : "PDF files must be 10 MB or smaller.");
+      event.target.value = "";
+      return;
+    }
+    setPendingAttachment(file);
+    setMessageError("");
   };
 
   const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -370,7 +424,7 @@ export function Messages() {
                   <span className="shrink-0 text-xs text-muted-foreground">{formatListTime(conversation.lastMessageAt ?? conversation.updatedAt)}</span>
                 </div>
                 <div className="mt-1 flex items-center gap-2">
-                  <p className={`min-w-0 flex-1 truncate text-sm ${conversation.unreadCount > 0 ? "font-medium text-foreground" : "text-muted-foreground"}`}>{conversation.lastMessage?.content || "Conversation started"}</p>
+                  <p className={`min-w-0 flex-1 truncate text-sm ${conversation.unreadCount > 0 ? "font-medium text-foreground" : "text-muted-foreground"}`}>{conversationPreview(conversation.lastMessage)}</p>
                   {conversation.unreadCount > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-primary-foreground">{conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}</span>}
                 </div>
               </div>
@@ -429,7 +483,28 @@ export function Messages() {
                         {showDay && <div className="mb-3 mt-1 text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{formatDayLabel(item.createdAt)}</div>}
                         <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                           <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 shadow-sm md:max-w-[68%] ${mine ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md border border-border bg-card text-foreground"}`}>
-                            <p className="whitespace-pre-wrap break-words text-sm leading-5">{item.content}</p>
+                            {(() => {
+                              const attachmentUrl = resolveMediaUrl(item.attachmentUrl);
+                              const kind = messageTypeKey(item);
+                              return (
+                                <>
+                                  {kind === "image" && attachmentUrl ? (
+                                    <a href={attachmentUrl} target="_blank" rel="noreferrer" className="mb-2 block overflow-hidden rounded-xl">
+                                      <Image src={attachmentUrl} alt={item.attachmentName || "Chat image"} width={360} height={260} unoptimized className="max-h-64 w-full object-cover" />
+                                    </a>
+                                  ) : kind === "file" && attachmentUrl ? (
+                                    <a href={attachmentUrl} target="_blank" rel="noreferrer" className={`mb-2 flex items-center gap-2 rounded-xl border px-3 py-2 ${mine ? "border-primary-foreground/25 bg-primary-foreground/10" : "border-border bg-muted"}`}>
+                                      <FileText className="h-5 w-5 shrink-0" />
+                                      <span className="min-w-0 flex-1">
+                                        <span className="block truncate text-sm font-semibold">{item.attachmentName || "Attachment.pdf"}</span>
+                                        <span className="block text-[11px] opacity-70">{formatFileSize(item.attachmentSize)}</span>
+                                      </span>
+                                    </a>
+                                  ) : null}
+                                  {item.content?.trim() ? <p className="whitespace-pre-wrap break-words text-sm leading-5">{item.content}</p> : null}
+                                </>
+                              );
+                            })()}
                             <div className={`mt-1 flex items-center justify-end gap-1.5 text-[10px] ${mine ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
                               <span>{formatMessageTime(item.createdAt)}</span>
                               {mine && <span>{item.isRead ? "Read" : "Sent"}</span>}
@@ -446,14 +521,36 @@ export function Messages() {
 
             <form onSubmit={sendMessage} className="border-t border-border bg-card p-4 md:px-6">
               {messageError && messages.length > 0 && <p className="mb-2 text-sm text-destructive">{messageError}</p>}
-              <div className="mx-auto flex max-w-4xl items-end gap-3">
-                <div className="min-w-0 flex-1">
-                  <textarea value={draft} onChange={(event) => setDraft(event.target.value.slice(0, MAX_MESSAGE_LENGTH))} onKeyDown={handleComposerKeyDown} rows={1} placeholder="Type a message..." className="max-h-32 min-h-[44px] w-full resize-none rounded-xl border border-border bg-muted px-4 py-3 text-sm outline-none transition focus:border-ring focus:bg-background focus:ring-2 focus:ring-ring/30" />
-                  {draft.length > 1800 && <p className="mt-1 text-right text-xs text-muted-foreground">{draft.length}/{MAX_MESSAGE_LENGTH}</p>}
+              <div className="mx-auto max-w-4xl">
+                <input
+                  ref={attachmentInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  className="hidden"
+                  onChange={handleAttachmentSelect}
+                />
+                {pendingAttachment ? (
+                  <div className="mb-2 flex items-center gap-3 rounded-xl border border-border bg-muted px-3 py-2 text-sm">
+                    {pendingAttachment.type.startsWith("image/") ? <Paperclip className="h-4 w-4 text-primary" /> : <FileText className="h-4 w-4 text-primary" />}
+                    <span className="min-w-0 flex-1 truncate font-medium text-foreground">{pendingAttachment.name}</span>
+                    <span className="text-xs text-muted-foreground">{formatFileSize(pendingAttachment.size)}</span>
+                    <button type="button" onClick={() => { setPendingAttachment(null); if (attachmentInputRef.current) attachmentInputRef.current.value = ""; }} className="rounded-md p-1 text-muted-foreground hover:bg-background hover:text-foreground" aria-label="Remove attachment">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : null}
+                <div className="flex items-end gap-3">
+                  <button type="button" onClick={() => attachmentInputRef.current?.click()} disabled={sending} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-muted text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50" aria-label="Attach image or PDF">
+                    <Paperclip className="h-4 w-4" />
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <textarea value={draft} onChange={(event) => setDraft(event.target.value.slice(0, MAX_MESSAGE_LENGTH))} onKeyDown={handleComposerKeyDown} rows={1} placeholder={pendingAttachment ? "Add a caption (optional)..." : "Type a message..."} className="max-h-32 min-h-[44px] w-full resize-none rounded-xl border border-border bg-muted px-4 py-3 text-sm outline-none transition focus:border-ring focus:bg-background focus:ring-2 focus:ring-ring/30" />
+                    {draft.length > 1800 && <p className="mt-1 text-right text-xs text-muted-foreground">{draft.length}/{MAX_MESSAGE_LENGTH}</p>}
+                  </div>
+                  <button type="submit" disabled={(!draft.trim() && !pendingAttachment) || sending} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground" aria-label="Send message">
+                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  </button>
                 </div>
-                <button type="submit" disabled={!draft.trim() || sending} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground" aria-label="Send message">
-                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                </button>
               </div>
             </form>
           </>

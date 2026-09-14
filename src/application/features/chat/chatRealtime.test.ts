@@ -59,6 +59,27 @@ describe("chatRealtime", () => {
     expect(normalized?.senderId).toBe("owner");
   });
 
+  it("preserves attachment metadata from SignalR payloads", () => {
+    const normalized = normalizeChatMessage({
+      Id: "m-file",
+      ConversationId: "c1",
+      SenderId: "customer",
+      Type: "File",
+      Content: "Invoice",
+      AttachmentUrl: "https://cdn.example.com/chat/invoice.pdf",
+      AttachmentName: "invoice.pdf",
+      AttachmentMimeType: "application/pdf",
+      AttachmentSize: 2048,
+      CreatedAt: "2026-08-13T03:00:00.000Z",
+    });
+
+    expect(normalized).toMatchObject({
+      attachmentUrl: "https://cdn.example.com/chat/invoice.pdf",
+      attachmentName: "invoice.pdf",
+      attachmentMimeType: "application/pdf",
+      attachmentSize: 2048,
+    });
+  });
   it("dedupes by message id and clientMessageId", () => {
     expect(isSameMessage(message(), message({ content: "hello again" }))).toBe(true);
     expect(isSameMessage(message({ id: "temp" }), message({ id: "server", content: "hello" }))).toBe(true);

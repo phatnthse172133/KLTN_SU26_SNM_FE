@@ -12,6 +12,12 @@ function readBoolean(value: unknown): boolean {
   return value === true || value === "true";
 }
 
+function readNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) return Number(value);
+  return null;
+}
+
 export function normalizeChatMessage(raw: unknown): ChatMessage | null {
   if (!raw || typeof raw !== "object") return null;
   const source = raw as UnknownRecord;
@@ -29,6 +35,10 @@ export function normalizeChatMessage(raw: unknown): ChatMessage | null {
     senderRole: readString(source.senderRole ?? source.SenderRole),
     type: (source.type ?? source.Type ?? "Text") as ChatMessage["type"],
     content: readString(source.content ?? source.Content),
+    attachmentUrl: readString(source.attachmentUrl ?? source.AttachmentUrl) || null,
+    attachmentName: readString(source.attachmentName ?? source.AttachmentName) || null,
+    attachmentMimeType: readString(source.attachmentMimeType ?? source.AttachmentMimeType) || null,
+    attachmentSize: readNumber(source.attachmentSize ?? source.AttachmentSize),
     isRead: readBoolean(source.isRead ?? source.IsRead),
     readAt: readString(source.readAt ?? source.ReadAt) || null,
     createdAt: readString(source.createdAt ?? source.CreatedAt) || new Date().toISOString(),
