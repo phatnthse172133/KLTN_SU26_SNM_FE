@@ -19,6 +19,7 @@ import { useAuth } from "@/application/context/AuthContext";
 import { useChatRealtime } from "@/application/context/ChatRealtimeContext";
 import { getErrorMessage } from "@/shared/errors/errorMapper";
 import { resolveMediaUrl } from "@/shared/utils";
+import { ChatImageLightbox, type ChatPreviewImage } from "@/presentation/components/chat/ChatImageLightbox";
 import {
   useJoinConversation,
   useOnChatReconnect,
@@ -129,6 +130,7 @@ export function Messages() {
   const [sending, setSending] = useState(false);
   const [listError, setListError] = useState("");
   const [messageError, setMessageError] = useState("");
+  const [previewImageId, setPreviewImageId] = useState<string | null>(null);
   const [markedReadFor, setMarkedReadFor] = useState<string | null>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -141,6 +143,17 @@ export function Messages() {
     () => conversations.find((conversation) => conversation.id === selectedId) ?? null,
     [conversations, selectedId],
   );
+
+  const previewImages = useMemo<ChatPreviewImage[]>(() => messages.flatMap((message) => {
+    if (messageTypeKey(message) !== "image") return [];
+    const url = resolveMediaUrl(message.attachmentUrl);
+    if (!url) return [];
+    return [{
+      id: message.id,
+      url,
+      name: message.attachmentName?.trim() || "Chat image",
+    }];
+  }), [messages]);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -489,9 +502,14 @@ export function Messages() {
                               return (
                                 <>
                                   {kind === "image" && attachmentUrl ? (
-                                    <a href={attachmentUrl} target="_blank" rel="noreferrer" className="mb-2 block overflow-hidden rounded-xl">
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewImageId(item.id)}
+                                      className="mb-2 block w-full cursor-zoom-in overflow-hidden rounded-xl text-left outline-none ring-offset-2 transition hover:brightness-95 focus-visible:ring-2 focus-visible:ring-ring"
+                                      aria-label={`Preview ${item.attachmentName || "chat image"}`}
+                                    >
                                       <Image src={attachmentUrl} alt={item.attachmentName || "Chat image"} width={360} height={260} unoptimized className="max-h-64 w-full object-cover" />
-                                    </a>
+                                    </button>
                                   ) : kind === "file" && attachmentUrl ? (
                                     <a href={attachmentUrl} target="_blank" rel="noreferrer" className={`mb-2 flex items-center gap-2 rounded-xl border px-3 py-2 ${mine ? "border-primary-foreground/25 bg-primary-foreground/10" : "border-border bg-muted"}`}>
                                       <FileText className="h-5 w-5 shrink-0" />
@@ -556,6 +574,13 @@ export function Messages() {
           </>
         )}
       </section>
+      <ChatImageLightbox
+        key={previewImageId ?? "closed"}
+        images={previewImages}
+        activeId={previewImageId}
+        onActiveIdChange={setPreviewImageId}
+        onClose={() => setPreviewImageId(null)}
+      />
     </div>
   );
 }
