@@ -49,10 +49,10 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${meta.className}`}>{meta.label}</span>;
 }
 
-function UpgradePrompt({ packageName, feature }: { packageName: string; feature: string }) {
+export function UpgradePrompt({ packageName, feature }: { packageName: string; feature: string }) {
   return (
-    <div className="h-full min-h-[180px] flex flex-col items-center justify-center text-center gap-2 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/50 p-6">
-      <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+    <div className="min-h-[180px] min-w-0 flex-1 flex flex-col items-center justify-center text-center gap-2 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/50 p-4 sm:p-6">
+      <div className="w-10 h-10 shrink-0 rounded-full bg-indigo-100 flex items-center justify-center">
         <Lock className="w-5 h-5 text-indigo-600" />
       </div>
       <p className="text-sm font-bold text-gray-900">{feature} is locked</p>
@@ -321,8 +321,8 @@ export function Dashboard() {
               </div>
             </div>
 
-            <div className="lg:col-span-3 bg-white rounded-xl border border-gray-200 shadow-[0_1px_4px_rgba(0,0,0,0.08)] p-6">
-              <h3 className="text-base font-bold text-gray-900 mb-5">Top Selling Items</h3>
+            <div className="lg:col-span-3 min-w-0 flex flex-col bg-white rounded-xl border border-gray-200 shadow-[0_1px_4px_rgba(0,0,0,0.08)] p-6">
+              <h3 className="shrink-0 text-base font-bold text-gray-900 mb-5">Top Selling Items</h3>
               {isLockedForCharts ? (
                 <UpgradePrompt packageName="Booth Boost" feature="Best-selling analytics" />
               ) : topFoods.length === 0 ? (
